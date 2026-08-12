@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser;
@@ -14,6 +15,7 @@ namespace NzbDrone.Core.Movies.Studios
         Studio FindByTitle(string title);
         List<Studio> SearchStudios(string cleanTitle, string foreignId);
         List<Studio> FindAllByTitle(string title);
+        List<Studio> FindAllByTitleFuzzy(string title);
         List<string> AllStudioForeignIds();
     }
 
@@ -37,6 +39,31 @@ namespace NzbDrone.Core.Movies.Studios
         public List<Studio> FindAllByTitle(string title)
         {
             return All().Where(x => x.CleanTitle == title || x.CleanSearchTitle == title || (x.Aliases != null && x.Aliases.Where(x => x.CleanStudioTitle()?.ToLower() == title).Any())).ToList();
+        }
+
+        public List<Studio> FindAllByTitleFuzzy(string title)
+        {
+            // Require a minimum length before doing substring matching, otherwise short/abbreviated
+            // titles (e.g. "ps") would match against a large number of unrelated studios.
+            if (title.IsNullOrWhiteSpace() || title.Length < 4)
+            {
+                return new List<Studio>();
+            }
+
+            bool StudioTitleMatches(string candidate)
+            {
+                if (candidate.IsNullOrWhiteSpace())
+                {
+                    return false;
+                }
+
+                return candidate.Contains(title) || title.Contains(candidate);
+            }
+
+            return All().Where(x => StudioTitleMatches(x.CleanTitle) ||
+                                     StudioTitleMatches(x.CleanSearchTitle) ||
+                                     (x.Aliases != null && x.Aliases.Any(a => StudioTitleMatches(a.CleanStudioTitle()?.ToLower()))))
+                         .ToList();
         }
 
         public Studio FindByForeignId(string foreignId)

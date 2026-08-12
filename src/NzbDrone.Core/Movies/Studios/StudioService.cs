@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies.Studios.Events;
@@ -31,13 +32,15 @@ namespace NzbDrone.Core.Movies.Studios
         private readonly IEventAggregator _eventAggregator;
         private readonly ICacheManager _cacheManager;
         private readonly string _cacheName;
+        private readonly Logger _logger;
 
-        public StudioService(IStudioRepository studioRepo, IEventAggregator eventAggregator, ICacheManager cacheManager)
+        public StudioService(IStudioRepository studioRepo, IEventAggregator eventAggregator, ICacheManager cacheManager, Logger logger)
         {
             _studioRepo = studioRepo;
             _eventAggregator = eventAggregator;
             _cacheManager = cacheManager;
             _cacheName = "Whisparr.Api.V3.Studios.StudioResource_studioResources";
+            _logger = logger;
         }
 
         public Studio AddStudio(Studio newStudio)
@@ -110,7 +113,31 @@ namespace NzbDrone.Core.Movies.Studios
         {
             var cleanTitle = title.CleanStudioTitle().ToLower();
 
-            return _studioRepo.FindAllByTitle(cleanTitle);
+            var matches = _studioRepo.FindAllByTitle(cleanTitle);
+
+            if (matches.Any())
+            {
+                return matches;
+            }
+
+            // Exact match against title/search title/aliases failed. Fall back to substring matching,
+            // but only trust it when it resolves to a single unambiguous studio - guessing wrong here
+            // causes worse outcomes (wrong scene matched) than returning nothing.
+            var fuzzyMatches = _studioRepo.FindAllByTitleFuzzy(cleanTitle);
+
+            if (fuzzyMatches.Count == 1)
+            {
+                _logger.Debug("No exact studio match for '{0}', using fuzzy match '{1}'", title, fuzzyMatches[0].Title);
+
+                return fuzzyMatches;
+            }
+
+            if (fuzzyMatches.Count > 1)
+            {
+                _logger.Debug("No exact studio match for '{0}', found {1} ambiguous fuzzy matches, skipping", title, fuzzyMatches.Count);
+            }
+
+            return matches;
         }
 
         public Studio FindByForeignId(string foreignId)
