@@ -146,11 +146,61 @@ namespace NzbDrone.Core.IndexerSearch
                 }
 
                 decisions = await Dispatch(indexer => indexer.Fetch(sceneSearchSpec), sceneSearchSpec);
+
+                // If the primary studio-qualified tier didn't produce any accepted result, fall back to
+                // queries that don't depend on studio resolution: a bare title search (if not already
+                // issued), a code-only search, and performer name + title combinations.
+                if (!decisions.Any(d => !d.Rejections.Any()))
+                {
+                    var fallbackTitles = BuildFallbackSceneTitles(sceneSearchSpec, originalTitles, code);
+                    fallbackTitles = fallbackTitles.Except(sceneSearchSpec.SceneTitles, StringComparer.InvariantCultureIgnoreCase).ToList();
+
+                    if (fallbackTitles.Any())
+                    {
+                        _logger.Debug("No accepted results from primary scene search for {0}, trying {1} fallback quer{2}", sceneSearchSpec, fallbackTitles.Count, fallbackTitles.Count == 1 ? "y" : "ies");
+
+                        sceneSearchSpec.SceneTitles = fallbackTitles;
+
+                        var fallbackDecisions = await Dispatch(indexer => indexer.Fetch(sceneSearchSpec), sceneSearchSpec);
+
+                        decisions = decisions.Concat(fallbackDecisions).ToList();
+                    }
+                }
             }
 
             downloadDecisions.AddRange(decisions);
 
             return DeDupeDecisions(downloadDecisions);
+        }
+
+        private static List<string> BuildFallbackSceneTitles(SceneSearchCriteria sceneSearchSpec, List<string> originalTitles, string code)
+        {
+            var fallbackTitles = new List<string>();
+
+            if (sceneSearchSpec.Movie.Title.IsNotNullOrWhiteSpace())
+            {
+                fallbackTitles.Add(sceneSearchSpec.Movie.Title);
+            }
+
+            if (code.IsNotNullOrWhiteSpace())
+            {
+                fallbackTitles.Add(code);
+            }
+
+            var performerNames = sceneSearchSpec.Movie.MovieMetadata.Value.Credits
+                .Select(c => c.Performer?.Name)
+                .Where(n => n.IsNotNullOrWhiteSpace())
+                .Distinct(StringComparer.InvariantCultureIgnoreCase);
+
+            foreach (var performerName in performerNames)
+            {
+                foreach (var originalTitle in originalTitles)
+                {
+                    fallbackTitles.Add($"{performerName} {originalTitle}");
+                }
+            }
+
+            return fallbackTitles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
         }
 
         private List<string> generateSceneTitles(List<string> sceneTitles, List<string> studioAliases, string studioTitle, List<string> releaseDateStrings, List<string> originalTitles, string code)
