@@ -19,6 +19,7 @@ public enum ImportRejectionReason
     MinimumFreeSpace,
     NoAudio,
     MovieNotFoundInRelease,
+    MovieNotFoundInFolder,
     Sample,
     SampleIndeterminate,
     Unpacking,
