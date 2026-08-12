@@ -527,6 +527,29 @@ namespace NzbDrone.Core.Test.ParserTests
             result.Revision.IsRepack.Should().Be(isRepack);
         }
 
+        [TestCase("Real Amateur POV 24.01.01 Title XXX 1080p")]
+        [TestCase("REAL Amateur POV 24.01.01 Title XXX 1080p")]
+        public void should_not_detect_real_when_it_is_the_first_word(string title)
+        {
+            var result = QualityParser.ParseQuality(title);
+            result.Revision.Real.Should().Be(0);
+        }
+
+        [TestCase("Studio.24.01.01.Title.REAL.XXX.1080p")]
+        [TestCase("Studio - Performer - Title REAL - 1080p")]
+        public void should_detect_real_when_it_appears_after_the_start_of_the_title(string title)
+        {
+            var result = QualityParser.ParseQuality(title);
+            result.Revision.Real.Should().Be(1);
+        }
+
+        [TestCase("Studio.24.01.01.Title.real.XXX.1080p")]
+        public void should_not_detect_real_when_lowercase(string title)
+        {
+            var result = QualityParser.ParseQuality(title);
+            result.Revision.Real.Should().Be(0);
+        }
+
         private void ParseAndVerifyQuality(string title, QualitySource source, bool proper, Resolution resolution)
         {
             var result = QualityParser.ParseQuality(title);

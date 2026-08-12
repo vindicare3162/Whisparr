@@ -838,9 +838,10 @@ namespace NzbDrone.Core.Parser
                 result.RevisionDetectionSource = QualityDetectionSource.Name;
             }
 
-            // TODO: re-enable this when we have a reliable way to determine real
-            // TODO: Only treat it as a real if it comes AFTER the season/episode number
-            var realRegexResult = RealRegex.Matches(name);
+            // Exclude a match at the very start of the title -- that's almost always the
+            // studio/movie name itself (e.g. a title beginning with "Real"), not a REAL/repack
+            // tag, which conventionally appears later in the release name near the quality tags.
+            var realRegexResult = RealRegex.Matches(name).Where(m => m.Index > 0).ToList();
 
             if (realRegexResult.Count > 0)
             {
