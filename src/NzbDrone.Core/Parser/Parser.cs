@@ -99,6 +99,14 @@ namespace NzbDrone.Core.Parser
             new Regex(@"\[(?<studiotitle>.+?)?\].?[(]+(?<episode>[eE]+\d{1,6})?[\)]",
                 RegexOptions.IgnoreCase | RegexOptions.Compiled),
 
+            // SCENE - Site (no brackets) - Performers - Title (yyyy-mm-dd) [Quality]
+            // Tried after all bracket-based scene patterns so bracketed studios (e.g. [Site] ...)
+            // are matched by those first, since brackets are stripped during title pre-processing
+            // and this pattern would otherwise match the pre-processed text too eagerly.
+            // 21Sextury - Mia Malkova - Poolside Passion (2024-06-01) [1080p]
+            new Regex(@"^(?<studiotitle>[^-]+?)(?<releasetoken>\s*-\s*.+?)\s*\(\s*(?<airyear>(19|20)\d{2})-(?<airmonth>[0-1][0-9])-(?<airday>[0-3][0-9])\s*\)",
+                RegexOptions.IgnoreCase | RegexOptions.Compiled),
+
             // Some german or french tracker formats (missing year, ...) (Only applies to german and TrueFrench releases) - see ParserFixture for examples and tests - french removed as it broke all movies w/ french titles
             new Regex(@"^(?<title>(?![(\[]).+?)((\W|_))(" + EditionRegex + @".{1,3})?(?:(?<!(19|20)\d{2}.*?)(?<!(?:Good|The)[_ .-])(German|TrueFrench))(.+?)(?=((19|20)\d{2}|$))(?<year>(19|20)\d{2}(?!p|i|\d+|\]|\W\d+))?(\W+|_|$)(?!\\)", RegexOptions.IgnoreCase | RegexOptions.Compiled),
 
@@ -231,6 +239,7 @@ namespace NzbDrone.Core.Parser
         private static readonly Regex UniCodeRegex = new Regex(@"[^\u0000-\u007F]+", RegexOptions.Compiled);
 
         private static readonly Regex RequestInfoRegex = new Regex(@"^(?:\[.+?\])+", RegexOptions.Compiled);
+        private static readonly Regex WwwPrefixRegex = new Regex(@"^www\.?\s*", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly string[] Numbers = new[] { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
         private static Dictionary<string, string> _umlautMappings = new Dictionary<string, string>
@@ -901,6 +910,7 @@ namespace NzbDrone.Core.Parser
 
                 var studioTitle = matchCollection[0].Groups["studiotitle"].Value.TrimAtEnd(".com").Replace('.', ' ').Replace('_', ' ');
                 studioTitle = RequestInfoRegex.Replace(studioTitle, "").Trim(' ');
+                studioTitle = WwwPrefixRegex.Replace(studioTitle, "").Trim(' ');
 
                 var lastSeasonEpisodeStringIndex = matchCollection[0].Groups["studiotitle"].EndIndex();
 

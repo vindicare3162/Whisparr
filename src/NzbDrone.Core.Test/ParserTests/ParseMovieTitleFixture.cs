@@ -40,6 +40,8 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p]", true)]
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p].mp4", true)]
         [TestCase("[Studio.com] (E09) Perfomer(aka Alias) [2015 г., All Sex, BJ, IR, 720p]", true)]
+        [TestCase("21Sextury - Mia Malkova - Poolside Passion (2024-06-01) [1080p]", true)] // Studio with numeric prefix, no brackets, no month name
+        [TestCase("Studio - Performer - Step-Sister Made Me Do It (2024-07-01)", true)] // Hyphenated word inside title
 
         public void should_parse_as_scene(string title, bool expected)
         {
@@ -71,6 +73,9 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p]", "Vixen")]
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p].mp4", "Vixen")]
         [TestCase("[Studio.com] (E09) Perfomer(aka Alias) [2015 г., All Sex, BJ, IR, 720p]", "Studio")]
+        [TestCase("21Sextury - Mia Malkova - Poolside Passion (2024-06-01) [1080p]", "21Sextury")]
+        [TestCase("Studio - Performer - Step-Sister Made Me Do It (2024-07-01)", "Studio")]
+        [TestCase("[www.Studio.com] Performer Name - Title (2024-01-10)", "Studio")]
         public void should_correctly_parse_studio_names(string title, string result)
         {
             Parser.Parser.ParseMovieTitle(title).StudioTitle.Should().Be(result);
@@ -98,6 +103,8 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("[Deeper] Key Mistress - Jessi Rae - 2025-12-18 - 1080p", "2025-12-18")]
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p]", "2025-12-03")]
         [TestCase("[Vixen] Matthew Meie, Erica Mori & Era Queen - Bratty College Girls Have Naughty Threesome (2025-12-03) [2160p].mp4", "2025-12-03")]
+        [TestCase("21Sextury - Mia Malkova - Poolside Passion (2024-06-01) [1080p]", "2024-06-01")]
+        [TestCase("Studio - Performer - Step-Sister Made Me Do It (2024-07-01)", "2024-07-01")]
         public void should_correctly_parse_release_date(string title, string result)
         {
             Parser.Parser.ParseMovieTitle(title).ReleaseDate.Should().Be(result);
