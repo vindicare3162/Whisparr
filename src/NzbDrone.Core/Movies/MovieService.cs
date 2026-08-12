@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using NLog;
@@ -72,6 +73,11 @@ namespace NzbDrone.Core.Movies
     public class MovieService : IMovieService, IHandle<MovieFileAddedEvent>,
                                                IHandle<MovieFileDeletedEvent>
     {
+        // Window used by the opt-in SearchApproximateDateMatching fallback: how many days
+        // away from the parsed release date a single remaining studio candidate may be
+        // and still be accepted as a match.
+        private const int ApproximateDateWindowDays = 1;
+
         private readonly IMovieRepository _movieRepository;
         private readonly IStudioService _studioService;
         private readonly IConfigService _configService;
@@ -652,12 +658,55 @@ namespace NzbDrone.Core.Movies
                 movies = matches.Keys.ToList();
             }
 
+            if (_configService.SearchApproximateDateMatching)
+            {
+                var approximateMatch = FindByStudioAndApproximateDate(studioForeignId, releaseDate);
+
+                if (approximateMatch != null)
+                {
+                    _logger.Debug("{0}: No exact match, but found a single unambiguous candidate within {1} day(s) of Date: {2} for Studio ForeignID: {3} -> {4}",
+                        methodName,
+                        ApproximateDateWindowDays,
+                        releaseDate,
+                        studioForeignId,
+                        approximateMatch);
+
+                    return approximateMatch;
+                }
+            }
+
             _logger.Debug("{0}: Failed to find a match.  Studio ForeignID: {1}, Date: {2}",
                 methodName,
                 studioForeignId,
                 releaseDate);
 
             return null;
+        }
+
+        // Opt-in fallback (SearchApproximateDateMatching): when exact-date/token matching fails,
+        // accept a release if exactly one movie for the studio falls within a small window of the
+        // parsed release date. Deliberately does not consider title/performer/code at all - it only
+        // fires when date proximity alone is enough to uniquely identify a candidate, trading
+        // precision for recall. Disabled by default.
+        private Movie FindByStudioAndApproximateDate(string studioForeignId, string releaseDate)
+        {
+            if (studioForeignId.IsNullOrWhiteSpace() || releaseDate.IsNullOrWhiteSpace())
+            {
+                return null;
+            }
+
+            if (!DateTime.TryParse(releaseDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedReleaseDate))
+            {
+                return null;
+            }
+
+            var candidates = _movieRepository.GetByStudioForeignId(studioForeignId)
+                .Where(m => m.MovieMetadata.Value.ReleaseDateUtc.HasValue &&
+                            Math.Abs((m.MovieMetadata.Value.ReleaseDateUtc.Value.Date - parsedReleaseDate.Date).TotalDays) <= ApproximateDateWindowDays)
+                .DistinctBy(m => m.Id)
+                .ToList();
+
+            return candidates.Count == 1 ? candidates[0] : null;
         }
 
         public Dictionary<Movie, MovieParseMatchType> MatchMovies(string parsedMovieTitle, string releaseDate, string foreignId, string episode, List<Movie> movies, bool verifyDate, bool verifyEpisode)

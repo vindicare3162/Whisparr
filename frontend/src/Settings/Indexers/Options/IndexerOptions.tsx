@@ -315,6 +315,18 @@ function IndexerOptions({
               {...settings.searchStudioFormat}
             />
           </FormGroup>
+
+          <FormGroup advancedSettings={showAdvancedSettings} isAdvanced={true}>
+            <FormLabel>{translate('SearchApproximateDateMatching')}</FormLabel>
+
+            <FormInputGroup
+              type={inputTypes.CHECK}
+              name="searchApproximateDateMatching"
+              helpText={translate('SearchApproximateDateMatchingHelpText')}
+              onChange={handleInputChange}
+              {...settings.searchApproximateDateMatching}
+            />
+          </FormGroup>
         </Form>
       ) : null}
     </FieldSet>

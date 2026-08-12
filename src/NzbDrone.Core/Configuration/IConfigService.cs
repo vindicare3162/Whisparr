@@ -69,6 +69,7 @@ namespace NzbDrone.Core.Configuration
         bool SearchStudioTitle { get; set; }
         SearchDateFormatType SearchDateFormat { get; set; }
         SearchStudioFormatType SearchStudioFormat { get; set; }
+        bool SearchApproximateDateMatching { get; set; }
 
         // UI
         int FirstDayOfWeek { get; set; }

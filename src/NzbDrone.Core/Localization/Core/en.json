@@ -1906,6 +1906,8 @@
   "ScrollMovies": "Scroll Movies",
   "Search": "Search",
   "SearchAll": "Search All",
+  "SearchApproximateDateMatching": "Search Approximate Date Matching",
+  "SearchApproximateDateMatchingHelpText": "Allow a scene release to match a studio/date-narrowed movie even without an exact title or date match, when it is the only candidate within a day of the release date. May increase false positive matches.",
   "SearchCutoffUnmet": "Search Cutoff Unmet",
   "SearchDateFormat": "Search Date Format",
   "SearchDateFormatHelpText": "The date format for searches",

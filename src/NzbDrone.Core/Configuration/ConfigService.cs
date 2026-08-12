@@ -169,6 +169,12 @@ namespace NzbDrone.Core.Configuration
             set { SetValue("SearchStudioFormat", value); }
         }
 
+        public bool SearchApproximateDateMatching
+        {
+            get { return GetValueBoolean("SearchApproximateDateMatching"); }
+            set { SetValue("SearchApproximateDateMatching", value); }
+        }
+
         public int MaximumSize
         {
             get { return GetValueInt("MaximumSize", 0); }
