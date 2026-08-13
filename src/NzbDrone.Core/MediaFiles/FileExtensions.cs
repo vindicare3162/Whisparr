@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using NzbDrone.Common.Extensions;
 
 namespace NzbDrone.Core.MediaFiles
 {
@@ -50,6 +51,11 @@ namespace NzbDrone.Core.MediaFiles
 
         public static string RemoveFileExtension(string title)
         {
+            if (title.IsNullOrWhiteSpace())
+            {
+                return title;
+            }
+
             title = FileExtensionRegex.Replace(title, m =>
             {
                 var extension = m.Value.ToLower();
