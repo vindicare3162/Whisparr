@@ -9,6 +9,7 @@ import NotFound from 'Components/NotFound';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
+import { fetchMovies } from 'Store/Actions/movieActions';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
 import MovieDetailsConnector from './MovieDetailsConnector';
@@ -50,7 +51,8 @@ function createMapStateToProps() {
 
 const mapDispatchToProps = {
   push,
-  fetchRootFolders
+  fetchRootFolders,
+  fetchMovies
 };
 
 class MovieDetailsPageConnector extends Component {
@@ -60,6 +62,7 @@ class MovieDetailsPageConnector extends Component {
 
   componentDidMount() {
     this.props.fetchRootFolders();
+    this.props.fetchMovies();
   }
 
   componentDidUpdate(prevProps) {
@@ -126,7 +129,8 @@ MovieDetailsPageConnector.propTypes = {
   error: PropTypes.object,
   match: PropTypes.shape({ params: PropTypes.shape({ titleSlug: PropTypes.string.isRequired }).isRequired }).isRequired,
   push: PropTypes.func.isRequired,
-  fetchRootFolders: PropTypes.func.isRequired
+  fetchRootFolders: PropTypes.func.isRequired,
+  fetchMovies: PropTypes.func.isRequired
 };
 
 export default connect(createMapStateToProps, mapDispatchToProps)(MovieDetailsPageConnector);

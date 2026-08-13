@@ -27,6 +27,7 @@ namespace NzbDrone.Core.Movies
         List<Movie> GetByStudioForeignId(string studioForeignId);
         List<Movie> GetByPerformerForeignId(string performerForeignId);
         List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds);
+        List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds);
         List<Movie> MoviesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored);
         PagingSpec<Movie> MoviesWithoutFiles(PagingSpec<Movie> pagingSpec);
         List<Movie> GetMoviesByFileId(int fileId);
@@ -44,6 +45,15 @@ namespace NzbDrone.Core.Movies
         HashSet<int> AllMovieWithCollectionsTmdbIds();
         void SetFileId(List<Movie> movies);
         List<Movie> SearchMovies(string cleanTitle, string foreignId);
+    }
+
+    public class PerformerMovieCount
+    {
+        public string PerformerForeignId { get; set; }
+        public int ItemType { get; set; }
+        public int TotalCount { get; set; }
+        public int HasFileCount { get; set; }
+        public long SizeOnDisk { get; set; }
     }
 
     public class MovieRepository : BasicRepository<Movie>, IMovieRepository
@@ -292,6 +302,47 @@ namespace NzbDrone.Core.Movies
 
                     return movie;
                 }).AsList();
+        }
+
+        public List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds)
+        {
+            if (performerForeignIds == null || performerForeignIds.Count == 0)
+            {
+                return new List<PerformerMovieCount>();
+            }
+
+            var parameters = new DynamicParameters();
+            var placeholders = new List<string>();
+
+            for (var i = 0; i < performerForeignIds.Count; i++)
+            {
+                var paramName = $"p{i}";
+                placeholders.Add($"@{paramName}");
+                parameters.Add(paramName, performerForeignIds[i]);
+            }
+
+            var inClause = string.Join(", ", placeholders);
+
+            using (var conn = _database.OpenConnection())
+            {
+                return conn.Query<PerformerMovieCount>(
+                    $@"SELECT c.""PerformerForeignId"",
+                             mm.""ItemType"" AS ItemType,
+                             COUNT(DISTINCT m.""Id"") AS TotalCount,
+                             COUNT(DISTINCT CASE WHEN m.""MovieFileId"" > 0 THEN m.""Id"" END) AS HasFileCount,
+                             COALESCE((SELECT SUM(mf.""Size"")
+                                       FROM ""MovieFiles"" mf
+                                       JOIN ""Movies"" m2 ON m2.""Id"" = mf.""MovieId""
+                                       WHERE m2.""MovieMetadataId"" IN (SELECT DISTINCT c2.""MovieMetadataId""
+                                                                        FROM ""Credits"" c2
+                                                                        WHERE c2.""PerformerForeignId"" = c.""PerformerForeignId"")), 0) AS SizeOnDisk
+                      FROM ""Credits"" c
+                      JOIN ""Movies"" m ON m.""MovieMetadataId"" = c.""MovieMetadataId""
+                      JOIN ""MovieMetadata"" mm ON mm.""Id"" = m.""MovieMetadataId""
+                      WHERE c.""PerformerForeignId"" IN ({inClause})
+                      GROUP BY c.""PerformerForeignId"", mm.""ItemType""",
+                    parameters).ToList();
+            }
         }
 
         public Movie FindByTpdbId(string tpdbid)

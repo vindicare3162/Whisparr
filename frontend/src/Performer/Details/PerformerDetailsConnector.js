@@ -6,6 +6,7 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { executeCommand } from 'Store/Actions/commandActions';
+import { fetchMoviesByPerformer } from 'Store/Actions/movieActions';
 import { togglePerformerMonitored } from 'Store/Actions/performerActions';
 import { cancelFetchReleases, clearReleases } from 'Store/Actions/releaseActions';
 import createAllPerformersSelector from 'Store/Selectors/createAllPerformersSelector';
@@ -19,14 +20,16 @@ const selectMovies = createSelector(
   (state, { foreignId }) => foreignId,
   (state) => state.movies,
   (foreignId, movies) => {
-    const {
-      items,
-      isFetching,
-      isPopulated,
-      error
-    } = movies;
+    const performerMovies = movies.performerMovies[foreignId] || {};
 
-    const filteredMovies = items.filter((movie) => movie.credits.some((credit) => credit.performer.foreignId === foreignId));
+    const {
+      items = [],
+      isFetching = false,
+      isPopulated = false,
+      error = null
+    } = performerMovies;
+
+    const filteredMovies = items;
     const studios = _.orderBy(_.uniqBy(filteredMovies.map((movie) => ({ title: movie.studioTitle, foreignId: movie.studioForeignId })), 'foreignId'), 'title').filter((s) => s.foreignId !== undefined);
     const totalMovieCount = filteredMovies.filter((movie) => movie.itemType === 'movie').length;
     const hasMovies = !!totalMovieCount;
@@ -136,6 +139,9 @@ function createMapDispatchToProps(dispatch, props) {
     dispatchExecuteCommand(payload) {
       dispatch(executeCommand(payload));
     },
+    dispatchFetchMoviesByPerformer(foreignId) {
+      dispatch(fetchMoviesByPerformer({ performerForeignId: foreignId }));
+    },
     onGoToPerformer(foreignId) {
       dispatch(push(`${window.Whisparr.urlBase}/performer/${foreignId}`));
     }
@@ -147,9 +153,14 @@ class PerformerDetailsConnector extends Component {
   //
   // Lifecycle
 
+  componentDidMount() {
+    this.props.dispatchFetchMoviesByPerformer(this.props.foreignId);
+  }
+
   componentDidUpdate(prevProps) {
     const {
-      id
+      id,
+      foreignId
     } = this.props;
 
     // If the id has changed we need to clear the episodes/episode
@@ -157,6 +168,10 @@ class PerformerDetailsConnector extends Component {
 
     if (prevProps.id !== id) {
       this.unpopulate();
+    }
+
+    if (prevProps.foreignId !== foreignId) {
+      this.props.dispatchFetchMoviesByPerformer(foreignId);
     }
   }
 
@@ -226,6 +241,7 @@ PerformerDetailsConnector.propTypes = {
   dispatchCancelFetchReleases: PropTypes.func.isRequired,
   dispatchTogglePerformerMonitored: PropTypes.func.isRequired,
   dispatchExecuteCommand: PropTypes.func.isRequired,
+  dispatchFetchMoviesByPerformer: PropTypes.func.isRequired,
   onGoToPerformer: PropTypes.func.isRequired
 };
 

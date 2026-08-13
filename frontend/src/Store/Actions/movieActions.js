@@ -267,7 +267,9 @@ export const defaultState = {
   pendingChanges: {},
   deleteOptions: {
     addImportExclusion: false
-  }
+  },
+  performerMovies: {},
+  studioMovies: {}
 };
 
 export const persistState = [
@@ -278,6 +280,10 @@ export const persistState = [
 // Actions Types
 
 export const FETCH_MOVIES = 'movies/fetchMovies';
+export const FETCH_MOVIES_BY_PERFORMER = 'movies/fetchMoviesByPerformer';
+export const SET_PERFORMER_MOVIES = 'movies/setPerformerMovies';
+export const FETCH_MOVIES_BY_STUDIO = 'movies/fetchMoviesByStudio';
+export const SET_STUDIO_MOVIES = 'movies/setStudioMovies';
 export const SEARCH_MOVIES = 'movies/searchMovies';
 export const SET_MOVIE_VALUE = 'movies/setMovieValue';
 export const SAVE_MOVIE = 'movies/saveMovie';
@@ -294,6 +300,10 @@ export const TOGGLE_MOVIE_MONITORED = 'movies/toggleMovieMonitored';
 // Action Creators
 
 export const fetchMovies = createThunk(FETCH_MOVIES);
+export const fetchMoviesByPerformer = createThunk(FETCH_MOVIES_BY_PERFORMER);
+export const setPerformerMovies = createAction(SET_PERFORMER_MOVIES);
+export const fetchMoviesByStudio = createThunk(FETCH_MOVIES_BY_STUDIO);
+export const setStudioMovies = createAction(SET_STUDIO_MOVIES);
 export const searchMovies = createThunk(SEARCH_MOVIES);
 
 export const saveMovie = createThunk(SAVE_MOVIE, (payload) => {
@@ -444,6 +454,118 @@ export const actionHandlers = handleThunks({
         isPopulated: false,
         error: xhr.aborted ? null : xhr
       }));
+    });
+
+    return abortRequest;
+  },
+
+  [FETCH_MOVIES_BY_PERFORMER]: (getState, payload, dispatch) => {
+    const { performerForeignId } = payload;
+
+    if (!performerForeignId) {
+      return;
+    }
+
+    // If we already have this performer's movies cached, don't refetch.
+    if (getState().movies.performerMovies[performerForeignId]) {
+      return;
+    }
+
+    const { request, abortRequest } = createAjaxRequest({
+      url: '/movie/listByPerformerForeignId',
+      data: { performerForeignId },
+      traditional: true
+    });
+
+    request.done((movieids) => {
+      if (!movieids || movieids.length === 0) {
+        dispatch(setPerformerMovies({ performerForeignId, movies: [] }));
+        return;
+      }
+
+      const requests = [];
+
+      const chunkSize = 50000;
+      for (let i = 0; i < movieids.length; i += chunkSize) {
+        const chunk = movieids.slice(i, i + chunkSize);
+
+        const promise = createAjaxRequest({
+          url: '/movie/bulk',
+          method: 'POST',
+          contentType: 'application/json',
+          dataType: 'json',
+          data: JSON.stringify(chunk)
+        });
+
+        requests.push(promise.request);
+      }
+
+      Promise.all(requests)
+        .then((results) => {
+          const data = results.flat();
+          dispatch(setPerformerMovies({ performerForeignId, movies: data }));
+        })
+        .catch((xhr) => {
+          dispatch(setPerformerMovies({ performerForeignId, movies: [], error: xhr.aborted ? null : xhr }));
+        });
+    }).fail((xhr) => {
+      dispatch(setPerformerMovies({ performerForeignId, movies: [], error: xhr.aborted ? null : xhr }));
+    });
+
+    return abortRequest;
+  },
+
+  [FETCH_MOVIES_BY_STUDIO]: (getState, payload, dispatch) => {
+    const { studioForeignId } = payload;
+
+    if (!studioForeignId) {
+      return;
+    }
+
+    // If we already have this studio's movies cached, don't refetch.
+    if (getState().movies.studioMovies[studioForeignId]) {
+      return;
+    }
+
+    const { request, abortRequest } = createAjaxRequest({
+      url: '/movie/listByStudioForeignId',
+      data: { studioForeignId },
+      traditional: true
+    });
+
+    request.done((movieids) => {
+      if (!movieids || movieids.length === 0) {
+        dispatch(setStudioMovies({ studioForeignId, movies: [] }));
+        return;
+      }
+
+      const requests = [];
+
+      const chunkSize = 50000;
+      for (let i = 0; i < movieids.length; i += chunkSize) {
+        const chunk = movieids.slice(i, i + chunkSize);
+
+        const promise = createAjaxRequest({
+          url: '/movie/bulk',
+          method: 'POST',
+          contentType: 'application/json',
+          dataType: 'json',
+          data: JSON.stringify(chunk)
+        });
+
+        requests.push(promise.request);
+      }
+
+      Promise.all(requests)
+        .then((results) => {
+          const data = results.flat();
+          dispatch(setStudioMovies({ studioForeignId, movies: data }));
+        })
+        .catch((xhr) => {
+          dispatch(setStudioMovies({ studioForeignId, movies: [], error: xhr.aborted ? null : xhr }));
+        });
+    }).fail((xhr) => {
+      dispatch(setStudioMovies({ studioForeignId, movies: [], error: xhr.aborted ? null : xhr }));
     });
 
     return abortRequest;
@@ -653,6 +775,38 @@ export const reducers = createHandleActions({
       ...state,
       deleteOptions: {
         ...payload
+      }
+    };
+  },
+  [SET_PERFORMER_MOVIES]: (state, { payload }) => {
+    const { performerForeignId, movies, error } = payload;
+
+    return {
+      ...state,
+      performerMovies: {
+        ...state.performerMovies,
+        [performerForeignId]: {
+          items: movies,
+          isFetching: false,
+          isPopulated: true,
+          error
+        }
+      }
+    };
+  },
+  [SET_STUDIO_MOVIES]: (state, { payload }) => {
+    const { studioForeignId, movies, error } = payload;
+
+    return {
+      ...state,
+      studioMovies: {
+        ...state.studioMovies,
+        [studioForeignId]: {
+          items: movies,
+          isFetching: false,
+          isPopulated: true,
+          error
+        }
       }
     };
   }

@@ -30,6 +30,7 @@ import MovieIndexSelectModeMenuItem from 'Movie/Index/Select/MovieIndexSelectMod
 import ParseToolbarButton from 'Parse/ParseToolbarButton';
 import NoScene from 'Scene/NoScene';
 import { executeCommand } from 'Store/Actions/commandActions';
+import { fetchMovies } from 'Store/Actions/movieActions';
 import { fetchQueueDetails } from 'Store/Actions/queueActions';
 import {
   setSceneFilter,
@@ -107,6 +108,7 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   useEffect(() => {
+    dispatch(fetchMovies());
     dispatch(fetchQueueDetails({ all: true }));
   }, [dispatch]);
 

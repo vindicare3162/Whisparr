@@ -14,7 +14,6 @@ using NzbDrone.Core.ImportLists.ImportExclusions;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies;
-using NzbDrone.Core.Movies.Credits;
 using NzbDrone.Core.Movies.Performers;
 using NzbDrone.Core.Movies.Performers.Events;
 using NzbDrone.Core.MovieStats;
@@ -34,7 +33,6 @@ namespace Whisparr.Api.V3.Performers
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IMovieService _moviesService;
         private readonly IMovieStatisticsService _movieStatisticsService;
-        private readonly ICreditService _creditService;
         private readonly IImportListExclusionService _exclusionService;
         private readonly IConfigService _configService;
         private readonly bool _useCache;
@@ -46,7 +44,6 @@ namespace Whisparr.Api.V3.Performers
                                    IMapCoversToLocal coverMapper,
                                    IMovieService moviesService,
                                    IMovieStatisticsService movieStatisticsService,
-                                   ICreditService creditService,
                                    IImportListExclusionService exclusionService,
                                    ICacheManager cacheManager,
                                    IConfigService configService,
@@ -60,7 +57,6 @@ namespace Whisparr.Api.V3.Performers
             _coverMapper = coverMapper;
             _moviesService = moviesService;
             _movieStatisticsService = movieStatisticsService;
-            _creditService = creditService;
             _exclusionService = exclusionService;
             _useCache = _configService.WhisparrCachePerformerAPI;
             _performerResourceCache = cacheManager.GetCache<PerformerResource>(typeof(PerformerResource), "performerResources");
@@ -237,9 +233,9 @@ namespace Whisparr.Api.V3.Performers
             LinkMovies(resource, movies, movieStatsByMovieId);
         }
 
-        // Batches movie/credit/stats lookups into a handful of queries instead of
-        // several per performer -- the per-performer version caused ~2x N queries
-        // for the full performer list (N being thousands in a typical library).
+        // Batch performer movie/stats linkage into a single aggregation query instead of
+        // loading every referenced movie into memory. The per-performer version caused
+        // ~2x N queries (N being thousands in a typical library).
         private void LinkMovies(List<PerformerResource> resources)
         {
             if (resources.Count == 0)
@@ -248,35 +244,36 @@ namespace Whisparr.Api.V3.Performers
             }
 
             var performerForeignIds = resources.Select(x => x.ForeignId).ToList();
-            var credits = _creditService.GetCreditsForPerformers(performerForeignIds);
+            var counts = _moviesService.GetPerformerMovieCounts(performerForeignIds);
 
-            var movieMetadataIds = credits.Select(x => x.MovieMetadataId).Distinct().ToList();
-            var movies = _moviesService.GetByMovieMetadataIds(movieMetadataIds);
-            var moviesByMetadataId = movies.ToDictionary(x => x.MovieMetadataId);
-
-            var movieStatsByMovieId = _movieStatisticsService.MovieStatistics(movies.Map(x => x.Id).ToList()).ToDictionary(x => x.MovieId);
-
-            var movieMetadataIdsByPerformer = credits
+            var countsByPerformer = counts
                 .GroupBy(x => x.PerformerForeignId)
-                .ToDictionary(g => g.Key, g => g.Select(x => x.MovieMetadataId).Distinct().ToList());
+                .ToDictionary(g => g.Key, g => g.ToList());
 
             foreach (var resource in resources)
             {
-                var performerMovies = new List<Movie>();
-
-                if (movieMetadataIdsByPerformer.TryGetValue(resource.ForeignId, out var metadataIds))
+                if (countsByPerformer.TryGetValue(resource.ForeignId, out var performerCounts))
                 {
-                    foreach (var metadataId in metadataIds)
-                    {
-                        if (moviesByMetadataId.TryGetValue(metadataId, out var movie))
-                        {
-                            performerMovies.Add(movie);
-                        }
-                    }
+                    LinkMovies(resource, performerCounts);
                 }
-
-                LinkMovies(resource, performerMovies, movieStatsByMovieId);
             }
+        }
+
+        private void LinkMovies(PerformerResource resource, List<PerformerMovieCount> counts)
+        {
+            var scenes = counts.Where(x => x.ItemType == (int)ItemType.Scene).ToList();
+            var movies = counts.Where(x => x.ItemType == (int)ItemType.Movie).ToList();
+
+            resource.HasScenes = scenes.Any();
+            resource.HasMovies = movies.Any();
+
+            resource.MovieCount = movies.Sum(x => x.HasFileCount);
+            resource.TotalMovieCount = movies.Sum(x => x.TotalCount);
+            resource.SceneCount = scenes.Sum(x => x.HasFileCount);
+            resource.TotalSceneCount = scenes.Sum(x => x.TotalCount);
+
+            // SizeOnDisk is the same across all ItemType groups for a performer, so take it once.
+            resource.SizeOnDisk = counts.Select(x => x.SizeOnDisk).FirstOrDefault();
         }
 
         private void LinkMovies(PerformerResource resource, List<Movie> movies, Dictionary<int, MovieStatistics> movieStatsByMovieId)
@@ -284,8 +281,6 @@ namespace Whisparr.Api.V3.Performers
             var scenes = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Scene);
             resource.HasScenes = scenes.Any();
             resource.HasMovies = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Movie).Any();
-
-            resource.Studios = scenes.Map(x => new PerformerStudioResource() { ForeignId = x.MovieMetadata.Value.StudioForeignId, Title = x.MovieMetadata.Value.StudioTitle }).DistinctBy(x => x.ForeignId).OrderBy(x => x.Title).ToList();
 
             resource.MovieCount = movies.Where(x => x.HasFile && x.MovieMetadata.Value.ItemType == ItemType.Movie).Count();
             resource.TotalMovieCount = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Movie).Count();

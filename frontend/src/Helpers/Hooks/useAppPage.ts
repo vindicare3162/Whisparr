@@ -4,7 +4,6 @@ import { createSelector } from 'reselect';
 import AppState from 'App/State/AppState';
 import { fetchTranslations } from 'Store/Actions/appActions';
 import { fetchCustomFilters } from 'Store/Actions/customFilterActions';
-import { fetchMovies } from 'Store/Actions/movieActions';
 import { fetchPerformers } from 'Store/Actions/performerActions';
 import {
   fetchImportLists,
@@ -115,7 +114,13 @@ const useAppPage = () => {
   }, []);
 
   useEffect(() => {
-    dispatch(fetchMovies());
+    // Note: fetchMovies() is intentionally NOT called here. The full movie
+    // catalog is large (tens of thousands of items / ~200MB) and is only
+    // needed by the Movie/Scene index pages. Pages that need it (MovieIndex,
+    // SceneIndex) fetch it themselves on mount. The performer/studio detail
+    // pages fetch only the selected item's movies on demand. Fetching the
+    // whole catalog here on every page load was the root cause of the
+    // app-wide slowness.
     dispatch(fetchCustomFilters());
     dispatch(fetchPerformers());
     dispatch(fetchStudios());

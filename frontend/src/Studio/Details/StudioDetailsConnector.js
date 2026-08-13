@@ -6,6 +6,7 @@ import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import * as commandNames from 'Commands/commandNames';
 import { executeCommand } from 'Store/Actions/commandActions';
+import { fetchMoviesByStudio } from 'Store/Actions/movieActions';
 import { cancelFetchReleases, clearReleases } from 'Store/Actions/releaseActions';
 import { toggleStudioMonitored } from 'Store/Actions/studioActions';
 import createAllStudiosSelector from 'Store/Selectors/createAllStudiosSelector';
@@ -18,14 +19,16 @@ const selectMovies = createSelector(
   (state, { foreignId }) => foreignId,
   (state) => state.movies,
   (foreignId, movies) => {
-    const {
-      items,
-      isFetching,
-      isPopulated,
-      error
-    } = movies;
+    const studioMovies = movies.studioMovies[foreignId] || {};
 
-    const filteredMovies = items.filter((movie) => movie.studioForeignId === foreignId);
+    const {
+      items = [],
+      isFetching = false,
+      isPopulated = false,
+      error = null
+    } = studioMovies;
+
+    const filteredMovies = items;
     const years = _.uniq(filteredMovies.map((movie) => movie.year)).sort();
     const totalMovieCount = filteredMovies.filter((movie) => movie.itemType === 'movie').length;
     const hasMovies = !!totalMovieCount;
@@ -134,6 +137,9 @@ function createMapDispatchToProps(dispatch, props) {
     dispatchExecuteCommand(payload) {
       dispatch(executeCommand(payload));
     },
+    dispatchFetchMoviesByStudio(foreignId) {
+      dispatch(fetchMoviesByStudio({ studioForeignId: foreignId }));
+    },
     onGoToStudio(foreignId) {
       dispatch(push(`${window.Whisparr.urlBase}/studio/${foreignId}`));
     }
@@ -145,9 +151,14 @@ class StudioDetailsConnector extends Component {
   //
   // Lifecycle
 
+  componentDidMount() {
+    this.props.dispatchFetchMoviesByStudio(this.props.foreignId);
+  }
+
   componentDidUpdate(prevProps) {
     const {
-      id
+      id,
+      foreignId
     } = this.props;
 
     // If the id has changed we need to clear the episodes/episode
@@ -155,6 +166,10 @@ class StudioDetailsConnector extends Component {
 
     if (prevProps.id !== id) {
       this.unpopulate();
+    }
+
+    if (prevProps.foreignId !== foreignId) {
+      this.props.dispatchFetchMoviesByStudio(foreignId);
     }
   }
 
@@ -224,6 +239,7 @@ StudioDetailsConnector.propTypes = {
   dispatchCancelFetchReleases: PropTypes.func.isRequired,
   dispatchToggleStudioMonitored: PropTypes.func.isRequired,
   dispatchExecuteCommand: PropTypes.func.isRequired,
+  dispatchFetchMoviesByStudio: PropTypes.func.isRequired,
   onGoToStudio: PropTypes.func.isRequired
 };
 

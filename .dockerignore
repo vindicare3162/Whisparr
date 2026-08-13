@@ -1,0 +1,9 @@
+.git
+_output
+_temp
+_tests
+_artifacts
+node_modules
+frontend/node_modules
+**/bin
+**/obj

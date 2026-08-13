@@ -1,0 +1,47 @@
+# Local-only Dockerfile for building this fork branch and running it alongside
+# production for testing. Not part of the official project build.
+
+FROM node:20-bullseye AS frontend
+WORKDIR /src
+COPY package.json yarn.lock .yarnrc ./
+RUN yarn install --frozen-lockfile --network-timeout 120000
+COPY frontend ./frontend
+COPY tsconfig.json ./
+RUN yarn run build --env production
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
+WORKDIR /src
+COPY src ./src
+COPY Logo ./Logo
+COPY --from=frontend /src/_output/UI ./_output/UI
+RUN dotnet msbuild -restore src/Whisparr.sln \
+    -p:SelfContained=True \
+    -p:Configuration=Release \
+    -p:Platform=Posix \
+    -p:RuntimeIdentifiers=linux-x64 \
+    -p:NuGetAudit=false \
+    -p:EnableAnalyzers=false \
+    -t:PublishAllRids
+
+RUN mkdir -p /app \
+    && cp -r _output/net8.0/linux-x64/publish/* /app/ \
+    && cp -r _output/UI /app/UI \
+    && rm -f /app/Whisparr.Windows.* /app/ServiceUninstall.* /app/ServiceInstall.*
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:8.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Match production's PUID/PGID (1000:1000) so files written to the shared
+# /config, /data/downloads, /data/media volumes keep consistent ownership.
+RUN groupadd -g 1000 whisparr \
+    && useradd -u 1000 -g 1000 -d /config -s /usr/sbin/nologin whisparr
+
+COPY --from=backend /app /app
+RUN chmod +x /app/Whisparr && chown -R whisparr:whisparr /app
+
+USER whisparr
+
+EXPOSE 6969
+ENTRYPOINT ["/app/Whisparr", "-nobrowser", "-data=/config"]

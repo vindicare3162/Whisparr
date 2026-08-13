@@ -60,6 +60,14 @@ interface MoviesAppState
   };
 
   pendingChanges: Partial<Movie>;
+
+  // Cache of movies keyed by performer foreignId, populated on-demand by the
+  // performer detail page so it doesn't have to download the full catalog.
+  performerMovies: Record<string, Movie[]>;
+
+  // Cache of movies keyed by studio foreignId, populated on-demand by the
+  // studio detail page so it doesn't have to download the full catalog.
+  studioMovies: Record<string, Movie[]>;
 }
 
 export default MoviesAppState;
