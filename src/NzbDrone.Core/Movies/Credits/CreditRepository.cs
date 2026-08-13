@@ -9,7 +9,9 @@ namespace NzbDrone.Core.Movies.Credits
     public interface ICreditRepository : IBasicRepository<Credit>
     {
         List<Credit> FindByMovieMetadataId(int movieId);
+        List<Credit> FindByMovieMetadataIds(List<int> movieMetadataIds);
         List<Credit> GetPerformerMovies(string performerForeignId);
+        List<Credit> FindByPerformerForeignIds(List<string> performerForeignIds);
         void DeleteForMovies(List<int> movieIds);
     }
 
@@ -32,6 +34,31 @@ namespace NzbDrone.Core.Movies.Credits
                 {
                     var creditPerformer = new CreditPerformer();
                     creditPerformer.Name = performer.Name;
+                    creditPerformer.ForeignId = performer.ForeignId;
+                    credit.Performer = creditPerformer;
+
+                    return credit;
+                }).ToList();
+        }
+
+        public List<Credit> FindByMovieMetadataIds(List<int> movieMetadataIds)
+        {
+            if (movieMetadataIds == null || movieMetadataIds.Count == 0)
+            {
+                return new List<Credit>();
+            }
+
+            var builder = new SqlBuilder(_database.DatabaseType)
+               .Join<Credit, Performer>((m, p) => m.PerformerForeignId == p.ForeignId)
+               .Where<Credit>(x => movieMetadataIds.Contains(x.MovieMetadataId));
+
+            return _database.QueryJoined<Credit, Performer>(
+                builder,
+                (credit, performer) =>
+                {
+                    var creditPerformer = new CreditPerformer();
+                    creditPerformer.Name = performer.Name;
+                    creditPerformer.ForeignId = performer.ForeignId;
                     credit.Performer = creditPerformer;
 
                     return credit;
@@ -50,10 +77,16 @@ namespace NzbDrone.Core.Movies.Credits
                 {
                     var creditPerformer = new CreditPerformer();
                     creditPerformer.Name = performer.Name;
+                    creditPerformer.ForeignId = performer.ForeignId;
                     credit.Performer = creditPerformer;
 
                     return credit;
                 }).ToList();
+        }
+
+        public List<Credit> FindByPerformerForeignIds(List<string> performerForeignIds)
+        {
+            return Query(x => performerForeignIds.Contains(x.PerformerForeignId));
         }
 
         public void DeleteForMovies(List<int> movieIds)

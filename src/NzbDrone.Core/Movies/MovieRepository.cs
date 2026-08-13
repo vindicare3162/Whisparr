@@ -26,6 +26,7 @@ namespace NzbDrone.Core.Movies
         List<Movie> FindByStudioAndDate(string studioForeignId, string date);
         List<Movie> GetByStudioForeignId(string studioForeignId);
         List<Movie> GetByPerformerForeignId(string performerForeignId);
+        List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds);
         List<Movie> MoviesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored);
         PagingSpec<Movie> MoviesWithoutFiles(PagingSpec<Movie> pagingSpec);
         List<Movie> GetMoviesByFileId(int fileId);
@@ -266,6 +267,22 @@ namespace NzbDrone.Core.Movies
                 .Join<Movie, MovieMetadata>((m, p) => m.MovieMetadataId == p.Id)
                 .Join<MovieMetadata, Credit>((m, p) => m.Id == p.MovieMetadataId)
                 .Where<Credit>(x => x.PerformerForeignId == performerForeignId);
+
+            return _database.QueryJoined<Movie, MovieMetadata>(
+                builder,
+                (movie, metadata) =>
+                {
+                    movie.MovieMetadata = metadata;
+
+                    return movie;
+                }).AsList();
+        }
+
+        public List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds)
+        {
+            var builder = new SqlBuilder(_database.DatabaseType)
+                .Join<Movie, MovieMetadata>((m, p) => m.MovieMetadataId == p.Id)
+                .Where<MovieMetadata>(x => movieMetadataIds.Contains(x.Id));
 
             return _database.QueryJoined<Movie, MovieMetadata>(
                 builder,

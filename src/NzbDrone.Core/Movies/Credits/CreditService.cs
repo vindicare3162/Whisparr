@@ -7,10 +7,12 @@ namespace NzbDrone.Core.Movies.Credits
     public interface ICreditService
     {
         List<Credit> GetAllCreditsForMovieMetadata(int movieMetadataId);
+        List<Credit> GetCreditsForMovieMetadataIds(List<int> movieMetadataIds);
         Credit AddCredit(Credit credit, MovieMetadata movie);
         List<Credit> AddCredits(List<Credit> credits, MovieMetadata movie);
         Credit GetById(int id);
         List<Credit> GetPerformerMovies(string performerForeignId);
+        List<Credit> GetCreditsForPerformers(List<string> performerForeignIds);
         List<Credit> GetAllCredits();
         List<Credit> UpdateCredits(List<Credit> credits, MovieMetadata movie);
     }
@@ -27,6 +29,11 @@ namespace NzbDrone.Core.Movies.Credits
         public List<Credit> GetAllCreditsForMovieMetadata(int movieMetadataId)
         {
             return _creditRepo.FindByMovieMetadataId(movieMetadataId).ToList();
+        }
+
+        public List<Credit> GetCreditsForMovieMetadataIds(List<int> movieMetadataIds)
+        {
+            return _creditRepo.FindByMovieMetadataIds(movieMetadataIds);
         }
 
         public Credit AddCredit(Credit credit, MovieMetadata movie)
@@ -50,6 +57,11 @@ namespace NzbDrone.Core.Movies.Credits
         public List<Credit> GetPerformerMovies(string performerForeignId)
         {
             return _creditRepo.GetPerformerMovies(performerForeignId).ToList();
+        }
+
+        public List<Credit> GetCreditsForPerformers(List<string> performerForeignIds)
+        {
+            return _creditRepo.FindByPerformerForeignIds(performerForeignIds);
         }
 
         public List<Credit> GetAllCredits()

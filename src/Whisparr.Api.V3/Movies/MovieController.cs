@@ -20,6 +20,7 @@ using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies;
 using NzbDrone.Core.Movies.Commands;
+using NzbDrone.Core.Movies.Credits;
 using NzbDrone.Core.Movies.Events;
 using NzbDrone.Core.MovieStats;
 using NzbDrone.Core.Parser;
@@ -47,6 +48,7 @@ namespace Whisparr.Api.V3.Movies
         private readonly IMovieService _moviesService;
         private readonly IAddMovieService _addMovieService;
         private readonly IMovieStatisticsService _movieStatisticsService;
+        private readonly ICreditService _creditService;
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IManageCommandQueue _commandQueueManager;
         private readonly IRootFolderService _rootFolderService;
@@ -60,6 +62,7 @@ namespace Whisparr.Api.V3.Movies
                            IMovieService moviesService,
                            IAddMovieService addMovieService,
                            IMovieStatisticsService movieStatisticsService,
+                           ICreditService creditService,
                            IMapCoversToLocal coverMapper,
                            IManageCommandQueue commandQueueManager,
                            IRootFolderService rootFolderService,
@@ -82,6 +85,7 @@ namespace Whisparr.Api.V3.Movies
             _moviesService = moviesService;
             _addMovieService = addMovieService;
             _movieStatisticsService = movieStatisticsService;
+            _creditService = creditService;
             _qualityUpgradableSpecification = qualityUpgradableSpecification;
             _configService = configService;
             _coverMapper = coverMapper;
@@ -227,6 +231,8 @@ namespace Whisparr.Api.V3.Movies
                     moviesResources.Add(movie.ToResource(availDelay, _qualityUpgradableSpecification));
                 }
 
+                LinkCredits(movies, moviesResources);
+
                 if (!excludeLocalCovers)
                 {
                     MapCoversToLocal(moviesResources, coverFileInfos);
@@ -321,6 +327,7 @@ namespace Whisparr.Api.V3.Movies
                 moviesResources.Add(movie.ToResource(availDelay, _qualityUpgradableSpecification));
             }
 
+            LinkCredits(movies, moviesResources);
             LinkMovieStatistics(moviesResources, sdict);
             MapCoversToLocal(moviesResources, coverFileInfos);
 
@@ -451,6 +458,30 @@ namespace Whisparr.Api.V3.Movies
             resource.Statistics = movieStatistics.ToResource();
             resource.HasFile = movieStatistics.MovieFileCount > 0;
             resource.SizeOnDisk = movieStatistics.SizeOnDisk;
+        }
+
+        private void LinkCredits(List<Movie> movies, List<MovieResource> resources)
+        {
+            if (movies == null || movies.Count == 0 || resources == null || resources.Count == 0)
+            {
+                return;
+            }
+
+            var movieMetadataIds = movies.Select(x => x.MovieMetadataId).Distinct().ToList();
+            var credits = _creditService.GetCreditsForMovieMetadataIds(movieMetadataIds);
+            var creditsByMovieMetadataId = credits.GroupBy(x => x.MovieMetadataId).ToDictionary(g => g.Key, g => g.ToList());
+
+            // Correlate each resource back to its movie's metadata id via the movie list.
+            var metadataIdByResourceId = movies.ToDictionary(x => x.Id, x => x.MovieMetadataId);
+
+            foreach (var movie in resources)
+            {
+                if (metadataIdByResourceId.TryGetValue(movie.Id, out var metadataId) &&
+                    creditsByMovieMetadataId.TryGetValue(metadataId, out var movieCredits))
+                {
+                    movie.Credits = movieCredits;
+                }
+            }
         }
 
         [NonAction]

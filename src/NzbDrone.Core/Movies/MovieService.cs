@@ -41,6 +41,7 @@ namespace NzbDrone.Core.Movies
         Movie FindScene(ParsedMovieInfo parsedMovieInfo, bool interactiveSearch = false, SearchCriteriaBase searchCriteria = null);
         List<Movie> GetByStudioForeignId(string studioForeignId);
         List<Movie> GetByPerformerForeignId(string performerForeignId);
+        List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds);
         Movie FindByPath(string path);
         Dictionary<int, string> AllMoviePaths();
         List<int> AllMovieIds();
@@ -280,6 +281,11 @@ namespace NzbDrone.Core.Movies
         public List<Movie> GetByPerformerForeignId(string performerForeignId)
         {
             return _movieRepository.GetByPerformerForeignId(performerForeignId);
+        }
+
+        public List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds)
+        {
+            return _movieRepository.GetByMovieMetadataIds(movieMetadataIds);
         }
 
         public void DeleteMovie(int movieId, bool deleteFiles, bool addImportListExclusion = false)

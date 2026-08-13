@@ -14,6 +14,7 @@ using NzbDrone.Core.ImportLists.ImportExclusions;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies;
+using NzbDrone.Core.Movies.Credits;
 using NzbDrone.Core.Movies.Performers;
 using NzbDrone.Core.Movies.Performers.Events;
 using NzbDrone.Core.MovieStats;
@@ -33,6 +34,7 @@ namespace Whisparr.Api.V3.Performers
         private readonly IMapCoversToLocal _coverMapper;
         private readonly IMovieService _moviesService;
         private readonly IMovieStatisticsService _movieStatisticsService;
+        private readonly ICreditService _creditService;
         private readonly IImportListExclusionService _exclusionService;
         private readonly IConfigService _configService;
         private readonly bool _useCache;
@@ -44,6 +46,7 @@ namespace Whisparr.Api.V3.Performers
                                    IMapCoversToLocal coverMapper,
                                    IMovieService moviesService,
                                    IMovieStatisticsService movieStatisticsService,
+                                   ICreditService creditService,
                                    IImportListExclusionService exclusionService,
                                    ICacheManager cacheManager,
                                    IConfigService configService,
@@ -57,6 +60,7 @@ namespace Whisparr.Api.V3.Performers
             _coverMapper = coverMapper;
             _moviesService = moviesService;
             _movieStatisticsService = movieStatisticsService;
+            _creditService = creditService;
             _exclusionService = exclusionService;
             _useCache = _configService.WhisparrCachePerformerAPI;
             _performerResourceCache = cacheManager.GetCache<PerformerResource>(typeof(PerformerResource), "performerResources");
@@ -227,18 +231,55 @@ namespace Whisparr.Api.V3.Performers
 
         private void FetchAndLinkMovies(PerformerResource resource)
         {
-            LinkMovies(resource, _moviesService.GetByPerformerForeignId(resource.ForeignId));
+            var movies = _moviesService.GetByPerformerForeignId(resource.ForeignId);
+            var movieStatsByMovieId = _movieStatisticsService.MovieStatistics(movies.Map(x => x.Id).ToList()).ToDictionary(x => x.MovieId);
+
+            LinkMovies(resource, movies, movieStatsByMovieId);
         }
 
+        // Batches movie/credit/stats lookups into a handful of queries instead of
+        // several per performer -- the per-performer version caused ~2x N queries
+        // for the full performer list (N being thousands in a typical library).
         private void LinkMovies(List<PerformerResource> resources)
         {
-            foreach (var performer in resources)
+            if (resources.Count == 0)
             {
-                FetchAndLinkMovies(performer);
+                return;
+            }
+
+            var performerForeignIds = resources.Select(x => x.ForeignId).ToList();
+            var credits = _creditService.GetCreditsForPerformers(performerForeignIds);
+
+            var movieMetadataIds = credits.Select(x => x.MovieMetadataId).Distinct().ToList();
+            var movies = _moviesService.GetByMovieMetadataIds(movieMetadataIds);
+            var moviesByMetadataId = movies.ToDictionary(x => x.MovieMetadataId);
+
+            var movieStatsByMovieId = _movieStatisticsService.MovieStatistics(movies.Map(x => x.Id).ToList()).ToDictionary(x => x.MovieId);
+
+            var movieMetadataIdsByPerformer = credits
+                .GroupBy(x => x.PerformerForeignId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.MovieMetadataId).Distinct().ToList());
+
+            foreach (var resource in resources)
+            {
+                var performerMovies = new List<Movie>();
+
+                if (movieMetadataIdsByPerformer.TryGetValue(resource.ForeignId, out var metadataIds))
+                {
+                    foreach (var metadataId in metadataIds)
+                    {
+                        if (moviesByMetadataId.TryGetValue(metadataId, out var movie))
+                        {
+                            performerMovies.Add(movie);
+                        }
+                    }
+                }
+
+                LinkMovies(resource, performerMovies, movieStatsByMovieId);
             }
         }
 
-        private void LinkMovies(PerformerResource resource, List<Movie> movies)
+        private void LinkMovies(PerformerResource resource, List<Movie> movies, Dictionary<int, MovieStatistics> movieStatsByMovieId)
         {
             var scenes = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Scene);
             resource.HasScenes = scenes.Any();
@@ -251,9 +292,7 @@ namespace Whisparr.Api.V3.Performers
             resource.SceneCount = movies.Where(x => x.HasFile && x.MovieMetadata.Value.ItemType == ItemType.Scene).Count();
             resource.TotalSceneCount = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Scene).Count();
 
-            var ids = movies.Map(x => x.Id).ToList();
-            var movieStats = _movieStatisticsService.MovieStatistics(ids);
-            resource.SizeOnDisk = movieStats.Sum(x => x.SizeOnDisk);
+            resource.SizeOnDisk = movies.Sum(x => movieStatsByMovieId.TryGetValue(x.Id, out var stats) ? stats.SizeOnDisk : 0);
         }
 
         private PerformerResource GetPerformerResource(string performerForeignId)
