@@ -75,9 +75,14 @@ function createMapStateToProps() {
     createPerformerSelector(),
     createDimensionsSelector(),
     (state) => _.get(state, 'performerScenes'),
-    (studioForeignId, isScenes, studio, scenes, performer, dimensions, performerScenes) => {
+    (studioForeignId, isScenes, studio, movies, performer, dimensions, performerScenes) => {
 
-      let items = scenes.items.filter((scene) => scene.studioForeignId === studioForeignId && scene.credits.some((credit) => credit.performer.foreignId === performer.foreignId));
+      // The performer detail page loads only this performer's movies on demand
+      // into movies.performerMovies[foreignId] (the full catalog is no longer
+      // fetched globally). Read from that slice so scene titles actually load.
+      const performerMovies = (movies.performerMovies[performer.foreignId] || {}).items || [];
+
+      let items = performerMovies.filter((scene) => scene.studioForeignId === studioForeignId && scene.credits.some((credit) => credit.performer.foreignId === performer.foreignId));
       if (isScenes) {
         items = items.filter((scene) => scene.itemType === 'scene');
       } else {
