@@ -18,7 +18,6 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies.Commands;
 using NzbDrone.Core.Movies.Performers.Commands;
 using NzbDrone.Core.Movies.Studios.Commands;
-using NzbDrone.Core.Update.Commands;
 
 namespace NzbDrone.Core.Jobs
 {
@@ -73,12 +72,12 @@ namespace NzbDrone.Core.Jobs
                         TypeName = typeof(MessagingCleanupCommand).FullName
                     },
 
-                    new ScheduledTask
-                    {
-                        Interval = 6 * 60,
-                        TypeName = typeof(ApplicationCheckUpdateCommand).FullName
-                    },
-
+                    // ApplicationCheckUpdateCommand is intentionally not scheduled here. This fork is
+                    // deployed via a manual rebuild-and-redeploy process, and the official update
+                    // service has no concept of this fork's builds -- it can only ever offer an
+                    // unrelated official build. The Docker-container self-install safety net in
+                    // InstallUpdateService relies on a package_info marker file that only the official
+                    // Docker image writes, so it does not protect a custom-built image like this one.
                     new ScheduledTask
                     {
                         Interval = 6 * 60,
