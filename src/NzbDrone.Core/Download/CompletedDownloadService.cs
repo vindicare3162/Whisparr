@@ -106,8 +106,12 @@ namespace NzbDrone.Core.Download
                 Enum.TryParse(historyItem.Data.GetValueOrDefault(MovieHistory.MOVIE_MATCH_TYPE, MovieMatchType.Unknown.ToString()), out MovieMatchType movieMatchType);
                 Enum.TryParse(historyItem.Data.GetValueOrDefault(MovieHistory.RELEASE_SOURCE, ReleaseSourceType.Unknown.ToString()), out ReleaseSourceType releaseSource);
 
-                // Show a warning if the release was matched by ID and the source is not interactive search
-                if (movieMatchType == MovieMatchType.Id && releaseSource != ReleaseSourceType.InteractiveSearch)
+                // A release matched by ID went through full decision-engine verification before being
+                // grabbed for any known release source (Rss/Search/UserInvokedSearch/InteractiveSearch/
+                // ReleasePush) -- that verification is the trustworthy event, not just the interactive
+                // case. Only require manual review when the source is genuinely unknown, e.g. a download
+                // added to the client outside Whisparr, or history predating this tracking.
+                if (movieMatchType == MovieMatchType.Id && releaseSource == ReleaseSourceType.Unknown)
                 {
                     trackedDownload.Warn("Found matching movie via grab history, but release was matched to movie by ID. Manual Import required.");
                     SetStateToImportBlocked(trackedDownload);
