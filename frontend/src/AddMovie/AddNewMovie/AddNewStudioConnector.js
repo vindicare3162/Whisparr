@@ -3,6 +3,7 @@ import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import { clearAddMovie, lookupStudio } from 'Store/Actions/addMovieActions';
+import { fetchMovieCount } from 'Store/Actions/movieActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
 import createUISettingsSelector from 'Store/Selectors/createUISettingsSelector';
@@ -12,7 +13,7 @@ import AddNewStudio from './AddNewStudio';
 function createMapStateToProps() {
   return createSelector(
     (state) => state.addMovie,
-    (state) => state.movies.items.length,
+    (state) => state.movies.count,
     (state) => state.router.location,
     createUISettingsSelector(),
     (addMovie, existingMoviesCount, location, uiSettings) => {
@@ -31,6 +32,7 @@ function createMapStateToProps() {
 const mapDispatchToProps = {
   lookupStudio,
   clearAddMovie,
+  fetchMovieCount,
   fetchRootFolders,
   fetchQueueDetails,
   clearQueueDetails
@@ -50,6 +52,7 @@ class AddNewStudioConnector extends Component {
   componentDidMount() {
     this.props.fetchRootFolders();
     this.props.fetchQueueDetails();
+    this.props.fetchMovieCount();
   }
 
   componentWillUnmount() {
@@ -106,6 +109,7 @@ AddNewStudioConnector.propTypes = {
   term: PropTypes.string,
   lookupStudio: PropTypes.func.isRequired,
   clearAddMovie: PropTypes.func.isRequired,
+  fetchMovieCount: PropTypes.func.isRequired,
   fetchRootFolders: PropTypes.func.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
   clearQueueDetails: PropTypes.func.isRequired

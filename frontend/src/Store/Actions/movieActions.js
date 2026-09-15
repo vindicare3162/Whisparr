@@ -262,6 +262,10 @@ export const defaultState = {
   isDeleting: false,
   deleteError: null,
   items: [],
+  // Lightweight total from GET /movie/count, fetched on demand (e.g. by the
+  // Add New pages for the "already exists" banner) so they don't need the
+  // full catalog. null until first fetched.
+  count: null,
   sortKey: 'sortTitle',
   sortDirection: sortDirections.ASCENDING,
   pendingChanges: {},
@@ -280,6 +284,7 @@ export const persistState = [
 // Actions Types
 
 export const FETCH_MOVIES = 'movies/fetchMovies';
+export const FETCH_MOVIE_COUNT = 'movies/fetchMovieCount';
 export const FETCH_MOVIES_BY_PERFORMER = 'movies/fetchMoviesByPerformer';
 export const SET_PERFORMER_MOVIES = 'movies/setPerformerMovies';
 export const FETCH_MOVIES_BY_STUDIO = 'movies/fetchMoviesByStudio';
@@ -300,6 +305,7 @@ export const TOGGLE_MOVIE_MONITORED = 'movies/toggleMovieMonitored';
 // Action Creators
 
 export const fetchMovies = createThunk(FETCH_MOVIES);
+export const fetchMovieCount = createThunk(FETCH_MOVIE_COUNT);
 export const fetchMoviesByPerformer = createThunk(FETCH_MOVIES_BY_PERFORMER);
 export const setPerformerMovies = createAction(SET_PERFORMER_MOVIES);
 export const fetchMoviesByStudio = createThunk(FETCH_MOVIES_BY_STUDIO);
@@ -447,6 +453,33 @@ export const actionHandlers = handleThunks({
             }));
           }
         });
+    }).fail((xhr) => {
+      dispatch(set({
+        section,
+        isFetching: false,
+        isPopulated: false,
+        error: xhr.aborted ? null : xhr
+      }));
+    });
+
+    return abortRequest;
+  },
+
+  [FETCH_MOVIE_COUNT]: (getState, payload, dispatch) => {
+    dispatch(set({ section, isFetching: true }));
+
+    const { request, abortRequest } = createAjaxRequest({
+      url: '/movie/count'
+    });
+
+    request.done((count) => {
+      dispatch(set({
+        section,
+        count,
+        isFetching: false,
+        isPopulated: true,
+        error: null
+      }));
     }).fail((xhr) => {
       dispatch(set({
         section,

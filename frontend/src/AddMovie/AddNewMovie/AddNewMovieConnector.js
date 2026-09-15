@@ -3,6 +3,7 @@ import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
 import { clearAddMovie, lookupMovie } from 'Store/Actions/addMovieActions';
+import { fetchMovieCount } from 'Store/Actions/movieActions';
 import { clearMovieFiles, fetchMovieFiles } from 'Store/Actions/movieFileActions';
 import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
@@ -15,7 +16,7 @@ import AddNewMovie from './AddNewMovie';
 function createMapStateToProps() {
   return createSelector(
     (state) => state.addMovie,
-    (state) => state.movies.items.length,
+    (state) => state.movies.count,
     (state) => state.router.location,
     createUISettingsSelector(),
     (addMovie, existingMoviesCount, location, uiSettings) => {
@@ -34,6 +35,7 @@ function createMapStateToProps() {
 const mapDispatchToProps = {
   lookupMovie,
   clearAddMovie,
+  fetchMovieCount,
   fetchRootFolders,
   fetchQueueDetails,
   clearQueueDetails,
@@ -55,6 +57,7 @@ class AddNewMovieConnector extends Component {
   componentDidMount() {
     this.props.fetchRootFolders();
     this.props.fetchQueueDetails();
+    this.props.fetchMovieCount();
   }
 
   componentDidUpdate(prevProps) {
@@ -127,6 +130,7 @@ AddNewMovieConnector.propTypes = {
   items: PropTypes.arrayOf(PropTypes.object).isRequired,
   lookupMovie: PropTypes.func.isRequired,
   clearAddMovie: PropTypes.func.isRequired,
+  fetchMovieCount: PropTypes.func.isRequired,
   fetchRootFolders: PropTypes.func.isRequired,
   fetchQueueDetails: PropTypes.func.isRequired,
   clearQueueDetails: PropTypes.func.isRequired,

@@ -270,6 +270,14 @@ namespace Whisparr.Api.V3.Movies
             return movieTask.GetAwaiter().GetResult();
         }
 
+        // Lightweight total so pages like Add New can show an "already exists" banner without
+        // downloading the full catalog (POST /movie/bulk is ~200MB for a 50k-movie library).
+        [HttpGet("count")]
+        public int MoviesCount()
+        {
+            return _moviesService.Count();
+        }
+
         // Added to support bulk monitor from Studio and eventually Performer detail page groupings
         [HttpPatch("bulk/monitor")]
         public IActionResult SetMoviesMonitored([FromBody] List<int> ids, [FromQuery] bool? monitored)

@@ -68,6 +68,10 @@ interface MoviesAppState
   // Cache of movies keyed by studio foreignId, populated on-demand by the
   // studio detail page so it doesn't have to download the full catalog.
   studioMovies: Record<string, Movie[]>;
+
+  // Lightweight total from GET /movie/count, fetched on demand (e.g. by the
+  // Add New pages). null until first fetched.
+  count: number | null;
 }
 
 export default MoviesAppState;

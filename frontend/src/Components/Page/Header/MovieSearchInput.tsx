@@ -14,12 +14,14 @@ import Autosuggest from 'react-autosuggest';
 import { useDispatch, useSelector } from 'react-redux';
 import { createSelector } from 'reselect';
 import { useDebouncedCallback } from 'use-debounce';
+import AppState from 'App/State/AppState';
 import { Tag } from 'App/State/TagsAppState';
 import Icon from 'Components/Icon';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import useKeyboardShortcuts from 'Helpers/Hooks/useKeyboardShortcuts';
 import { icons } from 'Helpers/Props';
 import Movie from 'Movie/Movie';
+import { fetchMovies } from 'Store/Actions/movieActions';
 import createAllMoviesSelector from 'Store/Selectors/createAllMoviesSelector';
 import createDeepEqualSelector from 'Store/Selectors/createDeepEqualSelector';
 import createTagsSelector from 'Store/Selectors/createTagsSelector';
@@ -134,6 +136,9 @@ function createMoviesSelector() {
 
 function MovieSearchInput() {
   const movies = useSelector(createMoviesSelector());
+  const moviesIsPopulated = useSelector(
+    (state: AppState) => state.movies.isPopulated
+  );
   const dispatch = useDispatch();
   const { bindShortcut, unbindShortcut } = useKeyboardShortcuts();
 
@@ -146,6 +151,17 @@ function MovieSearchInput() {
   const worker = useRef<Worker | null>(null);
   const isLoading = useRef(false);
   const requestValue = useRef<string | null>(null);
+  const catalogRequested = useRef(false);
+
+  // After the on-demand catalog work the full movie list is no longer loaded
+  // on every page; fetch it once on the first focus so the search suggestions
+  // work from any page (performer/studio detail etc.).
+  const handleFocus = useCallback(() => {
+    if (!moviesIsPopulated && !catalogRequested.current) {
+      catalogRequested.current = true;
+      dispatch(fetchMovies());
+    }
+  }, [moviesIsPopulated, dispatch]);
 
   const suggestionGroups = useMemo(() => {
     const result: Section[] = [];
@@ -425,6 +441,7 @@ function MovieSearchInput() {
     autoComplete: 'off',
     spellCheck: false,
     onChange: handleChange,
+    onFocus: handleFocus,
     onKeyDown: handleKeyDown,
     onBlur: handleBlur,
   };

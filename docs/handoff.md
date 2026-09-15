@@ -1,5 +1,53 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (2): On-demand movie count + search-on-focus + shared TagsModalContent (issues #33, #38)
+
+### What was done
+
+1. **Lightweight movie count endpoint** (`GET /api/v3/movie/count`, `MovieController.MoviesCount`
+   -> `IMovieService.Count()` -> `BasicRepository.Count()` = `SELECT COUNT(*)`).
+   Frontend: new `FETCH_MOVIE_COUNT` thunk in `movieActions.js` storing `state.movies.count`
+   (`MoviesAppState.count`). The four `AddNew*Connector` pages now dispatch `fetchMovieCount()`
+   on mount and read `state.movies.count` for the "already exists" banner - they no longer
+   depend on the full catalog being in Redux. (#33)
+2. **`MovieSearchInput` fetch-on-first-focus**: the header search dispatches `fetchMovies()`
+   once on the first focus if the catalog isn't populated, so suggestions work from any page
+   (previously they silently stayed empty until an index page was visited). (#33)
+3. **Shared `TagsModalContent`**: extracted the 7 near-identical copies (Movie, Scene,
+   Performer, Studio, DownloadClients, ImportLists, Indexers) into
+   `frontend/src/Components/Tags/TagsModalContent.tsx` (+ shared CSS). Each area file is now a
+   thin wrapper (~35 lines) selecting its collection and passing the area-specific help text;
+   public props are unchanged so callers were untouched. The O(n^2) `find`/`indexOf`-inside-`map`
+   pattern is replaced with `Map`/`Set` lookups. (#38)
+
+### Verification
+
+- `tsc --noEmit`: no errors in `frontend/src` (pre-existing @types/node duplicate-identifier
+  noise in node_modules typings remains, unrelated).
+- ESLint on touched files (after `--fix`): clean.
+- Backend: `dotnet build src/Whisparr.sln -p:NuGetAudit=false` -> 0 warnings/0 errors;
+  Core.Test filtered run (ParseMovieTitle, SceneReleaseTitle, MovieRepository, CreditRepository,
+  StudioService fixtures) -> 136/136 passed.
+- **WIP from an earlier session was committed in the preceding commit** ("Commit pending
+  backend work..."): it contained `GetStudioMovieCounts`, which the already-pushed
+  `StudioController` calls - HEAD was unbuildable without it. Also includes the parser
+  duplicated-studio-title collapse, ReleaseTitleSpecification raw-title fallback,
+  MovieStatisticsRepository O(n^2) fix, AddPerformer/Studio transient-failure tolerance, and the
+  Dockerfile.local-test `/app/bin` + package_info Docker-deployment layout.
+
+### Remaining open issues
+
+| Issue | Title |
+|-------|-------|
+| #34 | Detail pages fetch single item instead of full catalog |
+| #37 | Server-side paging for Movies/Scenes indexes |
+| #39 | Watch correlated SizeOnDisk subquery at scale (note) |
+| #36 | Continue TS migration (tracking) |
+
+Stray file: `IDEA.md` (one-line scratch note, untracked) - safe to delete.
+
+---
+
 ## 2026-09-15: Resource-cache hardening PR (issues #28, #29, #30, #31, #32, #35)
 
 Implemented in one change set. See `CODE_REVIEW_REPORT.md` for the full review that produced
@@ -69,10 +117,8 @@ these issues.
 
 | Issue | Title | Status |
 |-------|-------|--------|
-| #33 | MovieSearchInput fetch-on-focus + AddNew existence check | open |
 | #34 | Detail pages fetch single item instead of full catalog | open |
 | #37 | Server-side paging for Movies/Scenes indexes | open |
-| #38 | Consolidate TagsModalContent ×4 + O(n²) lookup | open |
 | #39 | Watch correlated SizeOnDisk subquery at scale (note) | open |
 | #36 | Continue TS migration (tracking) | open |
 
