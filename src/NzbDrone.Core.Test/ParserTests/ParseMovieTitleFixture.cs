@@ -76,6 +76,7 @@ namespace NzbDrone.Core.Test.ParserTests
         [TestCase("21Sextury - Mia Malkova - Poolside Passion (2024-06-01) [1080p]", "21Sextury")]
         [TestCase("Studio - Performer - Step-Sister Made Me Do It (2024-07-01)", "Studio")]
         [TestCase("[www.Studio.com] Performer Name - Title (2024-01-10)", "Studio")]
+        [TestCase("Intimates_.Intimates.2020.11.20.AJ.Applegate.Come.Home.To.A.J", "Intimates")]
         public void should_correctly_parse_studio_names(string title, string result)
         {
             Parser.Parser.ParseMovieTitle(title).StudioTitle.Should().Be(result);

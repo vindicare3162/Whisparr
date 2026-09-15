@@ -23,10 +23,17 @@ RUN dotnet msbuild -restore src/Whisparr.sln \
     -p:EnableAnalyzers=false \
     -t:PublishAllRids
 
-RUN mkdir -p /app \
-    && cp -r _output/net8.0/linux-x64/publish/* /app/ \
-    && cp -r _output/UI /app/UI \
-    && rm -f /app/Whisparr.Windows.* /app/ServiceUninstall.* /app/ServiceInstall.*
+RUN mkdir -p /app/bin \
+    && cp -r _output/net8.0/linux-x64/publish/* /app/bin/ \
+    && cp -r _output/UI /app/bin/UI \
+    && rm -f /app/bin/Whisparr.Windows.* /app/bin/ServiceUninstall.* /app/bin/ServiceInstall.*
+
+# DeploymentInfoProvider only reads package_info when the running assembly's directory is
+# literally named "bin" (matching the official Docker image's layout) - this marks the app as a
+# Docker deployment, which disables the built-in self-updater UI/checks entirely. Without this,
+# a locally-built image defaults to UpdateMechanism.BuiltIn and shows update prompts against the
+# official upstream project's releases, which don't apply to this fork.
+RUN printf 'UpdateMethod=Docker\nBranch=eros\n' > /app/package_info
 
 FROM mcr.microsoft.com/dotnet/runtime-deps:8.0
 RUN apt-get update \
@@ -39,9 +46,9 @@ RUN groupadd -g 1000 whisparr \
     && useradd -u 1000 -g 1000 -d /config -s /usr/sbin/nologin whisparr
 
 COPY --from=backend /app /app
-RUN chmod +x /app/Whisparr && chown -R whisparr:whisparr /app
+RUN chmod +x /app/bin/Whisparr && chown -R whisparr:whisparr /app
 
 USER whisparr
 
 EXPOSE 6969
-ENTRYPOINT ["/app/Whisparr", "-nobrowser", "-data=/config"]
+ENTRYPOINT ["/app/bin/Whisparr", "-nobrowser", "-data=/config"]

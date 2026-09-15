@@ -565,6 +565,44 @@ namespace NzbDrone.Core.Parser
             return string.Empty;
         }
 
+        // Some release groups double the site's short code in the filename, e.g.
+        // "Intimates_.Intimates.2020.11.20.AJ.Applegate.Come.Home.To.A.J", which by this point
+        // has become "Intimates Intimates" after '.'/'_' were normalized to spaces. Left alone,
+        // CleanStudioTitle strips the space and produces "intimatesintimates", which then fails
+        // to match the real studio title ("vixenmediagroupintimates") either exactly or as a
+        // substring in either direction - collapse an exact whole-string repeat down to one copy.
+        private static string CollapseDuplicatedStudioTitle(string studioTitle)
+        {
+            if (studioTitle.IsNullOrWhiteSpace())
+            {
+                return studioTitle;
+            }
+
+            var normalized = Regex.Replace(studioTitle, @"\s+", " ").Trim();
+
+            if (normalized.Length % 2 == 0)
+            {
+                return normalized;
+            }
+
+            var half = normalized.Length / 2;
+
+            if (normalized[half] != ' ')
+            {
+                return normalized;
+            }
+
+            var firstHalf = normalized.Substring(0, half);
+            var secondHalf = normalized.Substring(half + 1);
+
+            if (firstHalf.Length > 0 && firstHalf.Equals(secondHalf, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return firstHalf;
+            }
+
+            return normalized;
+        }
+
         public static string CleanMovieTitle(this string title)
         {
             if (title.IsNullOrWhiteSpace())
@@ -911,6 +949,7 @@ namespace NzbDrone.Core.Parser
                 var studioTitle = matchCollection[0].Groups["studiotitle"].Value.TrimAtEnd(".com").Replace('.', ' ').Replace('_', ' ');
                 studioTitle = RequestInfoRegex.Replace(studioTitle, "").Trim(' ');
                 studioTitle = WwwPrefixRegex.Replace(studioTitle, "").Trim(' ');
+                studioTitle = CollapseDuplicatedStudioTitle(studioTitle);
 
                 var lastSeasonEpisodeStringIndex = matchCollection[0].Groups["studiotitle"].EndIndex();
 

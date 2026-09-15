@@ -46,12 +46,17 @@ namespace NzbDrone.Core.MovieStats
 
         private List<MovieStatistics> MapResults(List<MovieStatistics> moviesResult, List<MovieStatistics> filesResult)
         {
+            // Dictionary lookup instead of per-row SingleOrDefault - GetAllMovies feeds this with
+            // every movie in the library, and the linear scan made mapping O(n*m).
+            var filesByMovieId = filesResult.ToDictionary(f => f.MovieId, f => f);
+
             moviesResult.ForEach(e =>
             {
-                var file = filesResult.SingleOrDefault(f => f.MovieId == e.MovieId);
-
-                e.SizeOnDisk = file?.SizeOnDisk ?? 0;
-                e.ReleaseGroupsString = file?.ReleaseGroupsString;
+                if (filesByMovieId.TryGetValue(e.MovieId, out var file))
+                {
+                    e.SizeOnDisk = file.SizeOnDisk;
+                    e.ReleaseGroupsString = file.ReleaseGroupsString;
+                }
             });
 
             return moviesResult;

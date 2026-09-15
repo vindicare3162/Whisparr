@@ -89,15 +89,6 @@ namespace NzbDrone.Core.Movies.Performers
 
                     performersToAdd.Add(performer);
                 }
-                catch (ValidationException ex)
-                {
-                    if (!ignoreErrors)
-                    {
-                        throw;
-                    }
-
-                    _logger.Error("StashId {0} was not added due to validation failures. {1}", m.ForeignId, ex.Message);
-                }
                 catch (Exception ex)
                 {
                     if (!ignoreErrors)
@@ -128,6 +119,15 @@ namespace NzbDrone.Core.Movies.Performers
                                               {
                                                   new ValidationFailure("StashId", $"A performer with this ID was not found.", newPerformer.ForeignId)
                                               });
+            }
+            catch (Exception ex)
+            {
+                // Upstream metadata provider returned a transient failure
+                // (503, timeout, network). Log and return the performer as-is
+                // rather than failing the entire add — Whisparr's scheduled
+                // refresh will retry with correct metadata later.
+                _logger.Warn(ex, "Failed to fetch SkyHook data for performer {0} (ForeignId={1}), proceeding without metadata", newPerformer.Name, newPerformer.ForeignId);
+                return newPerformer;
             }
 
             performer.ApplyChanges(newPerformer);

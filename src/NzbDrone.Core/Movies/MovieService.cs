@@ -43,9 +43,11 @@ namespace NzbDrone.Core.Movies
         List<Movie> GetByPerformerForeignId(string performerForeignId);
         List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds);
         List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds);
+        List<StudioMovieCount> GetStudioMovieCounts(List<string> studioForeignIds);
         Movie FindByPath(string path);
         Dictionary<int, string> AllMoviePaths();
         List<int> AllMovieIds();
+        int Count();
         List<int> AllMovieTmdbIds();
         List<string> AllMovieTpdbIds();
         List<string> AllMovieStashIds();
@@ -254,6 +256,11 @@ namespace NzbDrone.Core.Movies
             return _movieRepository.AllMovieIds();
         }
 
+        public int Count()
+        {
+            return _movieRepository.Count();
+        }
+
         public List<int> AllMovieTmdbIds()
         {
             return _movieRepository.AllMovieTmdbIds();
@@ -292,6 +299,11 @@ namespace NzbDrone.Core.Movies
         public List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds)
         {
             return _movieRepository.GetPerformerMovieCounts(performerForeignIds);
+        }
+
+        public List<StudioMovieCount> GetStudioMovieCounts(List<string> studioForeignIds)
+        {
+            return _movieRepository.GetStudioMovieCounts(studioForeignIds);
         }
 
         public void DeleteMovie(int movieId, bool deleteFiles, bool addImportListExclusion = false)

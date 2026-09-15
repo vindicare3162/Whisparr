@@ -136,6 +136,11 @@ namespace NzbDrone.Core.Movies.Studios
                                                   new ValidationFailure("StashId", $"A studio with this ID was not found.", newStudio.ForeignId)
                                               });
             }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to fetch SkyHook data for studio {0} (ForeignId={1}), proceeding without metadata", newStudio.Title, newStudio.ForeignId);
+                return newStudio;
+            }
 
             studio.ApplyChanges(newStudio);
 

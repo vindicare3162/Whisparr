@@ -28,6 +28,7 @@ namespace NzbDrone.Core.Movies
         List<Movie> GetByPerformerForeignId(string performerForeignId);
         List<Movie> GetByMovieMetadataIds(List<int> movieMetadataIds);
         List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds);
+        List<StudioMovieCount> GetStudioMovieCounts(List<string> studioForeignIds);
         List<Movie> MoviesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored);
         PagingSpec<Movie> MoviesWithoutFiles(PagingSpec<Movie> pagingSpec);
         List<Movie> GetMoviesByFileId(int fileId);
@@ -54,6 +55,19 @@ namespace NzbDrone.Core.Movies
         public int TotalCount { get; set; }
         public int HasFileCount { get; set; }
         public long SizeOnDisk { get; set; }
+    }
+
+    public class StudioMovieCount
+    {
+        public string StudioForeignId { get; set; }
+        public int ItemType { get; set; }
+        public int TotalCount { get; set; }
+        public int HasFileCount { get; set; }
+        public long SizeOnDisk { get; set; }
+
+        // Comma-separated distinct years of the studio's scenes, produced by GROUP_CONCAT/string_agg
+        // in the aggregation query. The same for every ItemType group.
+        public string Years { get; set; }
     }
 
     public class MovieRepository : BasicRepository<Movie>, IMovieRepository
@@ -306,43 +320,107 @@ namespace NzbDrone.Core.Movies
 
         public List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds)
         {
-            if (performerForeignIds == null || performerForeignIds.Count == 0)
+            var results = new List<PerformerMovieCount>();
+
+            // Chunked to stay well below SQLite's host-parameter limit (and to keep query plans cheap)
+            foreach (var chunk in (performerForeignIds ?? new List<string>()).Chunk(500))
             {
-                return new List<PerformerMovieCount>();
+                var parameters = new DynamicParameters();
+                var placeholders = new List<string>();
+
+                for (var i = 0; i < chunk.Length; i++)
+                {
+                    var paramName = $"p{i}";
+                    placeholders.Add($"@{paramName}");
+                    parameters.Add(paramName, chunk[i]);
+                }
+
+                var inClause = string.Join(", ", placeholders);
+
+                using (var conn = _database.OpenConnection())
+                {
+                    results.AddRange(conn.Query<PerformerMovieCount>(
+                        $@"SELECT c.""PerformerForeignId"",
+                                 mm.""ItemType"" AS ItemType,
+                                 COUNT(DISTINCT m.""Id"") AS TotalCount,
+                                 COUNT(DISTINCT CASE WHEN m.""MovieFileId"" > 0 THEN m.""Id"" END) AS HasFileCount,
+                                 COALESCE((SELECT SUM(mf.""Size"")
+                                           FROM ""MovieFiles"" mf
+                                           JOIN ""Movies"" m2 ON m2.""Id"" = mf.""MovieId""
+                                           WHERE m2.""MovieMetadataId"" IN (SELECT DISTINCT c2.""MovieMetadataId""
+                                                                            FROM ""Credits"" c2
+                                                                            WHERE c2.""PerformerForeignId"" = c.""PerformerForeignId"")), 0) AS SizeOnDisk
+                          FROM ""Credits"" c
+                          JOIN ""Movies"" m ON m.""MovieMetadataId"" = c.""MovieMetadataId""
+                          JOIN ""MovieMetadata"" mm ON mm.""Id"" = m.""MovieMetadataId""
+                          WHERE c.""PerformerForeignId"" IN ({inClause})
+                          GROUP BY c.""PerformerForeignId"", mm.""ItemType""",
+                        parameters).ToList());
+                }
             }
 
-            var parameters = new DynamicParameters();
-            var placeholders = new List<string>();
+            return results;
+        }
 
-            for (var i = 0; i < performerForeignIds.Count; i++)
+        // Single aggregated query replacing the per-studio GetByStudioForeignId + MovieStatistics
+        // loop, which ran ~3 queries per studio (full Movie entity materialization included) while
+        // the studio resource cache lock was held.
+        public List<StudioMovieCount> GetStudioMovieCounts(List<string> studioForeignIds)
+        {
+            var results = new List<StudioMovieCount>();
+
+            foreach (var chunk in (studioForeignIds ?? new List<string>()).Chunk(500))
             {
-                var paramName = $"p{i}";
-                placeholders.Add($"@{paramName}");
-                parameters.Add(paramName, performerForeignIds[i]);
+                var parameters = new DynamicParameters();
+                var placeholders = new List<string>();
+
+                for (var i = 0; i < chunk.Length; i++)
+                {
+                    var paramName = $"p{i}";
+                    placeholders.Add($"@{paramName}");
+                    parameters.Add(paramName, chunk[i]);
+                }
+
+                var inClause = string.Join(", ", placeholders);
+
+                // GROUP_CONCAT/string_agg over an ordered DISTINCT year list; the subselect collapses
+                // duplicates before aggregating so the Years string is deduped and sorted.
+                var yearsSelect = _database.DatabaseType == DatabaseType.SQLite
+                    ? @"(SELECT GROUP_CONCAT(y.""Year"", ',')
+                           FROM (SELECT DISTINCT mm3.""Year"" AS ""Year""
+                                 FROM ""MovieMetadata"" mm3
+                                 WHERE mm3.""StudioForeignId"" = mm.""StudioForeignId""
+                                   AND mm3.""Year"" IS NOT NULL
+                                 ORDER BY mm3.""Year"") y)"
+                    : @"(SELECT string_agg(y.""Year""::text, ',' ORDER BY y.""Year"")
+                           FROM (SELECT DISTINCT mm3.""Year"" AS ""Year""
+                                 FROM ""MovieMetadata"" mm3
+                                 WHERE mm3.""StudioForeignId"" = mm.""StudioForeignId""
+                                   AND mm3.""Year"" IS NOT NULL) y)";
+
+                using (var conn = _database.OpenConnection())
+                {
+                    results.AddRange(conn.Query<StudioMovieCount>(
+                        $@"SELECT mm.""StudioForeignId"",
+                                 mm.""ItemType"" AS ItemType,
+                                 COUNT(DISTINCT m.""Id"") AS TotalCount,
+                                 COUNT(DISTINCT CASE WHEN m.""MovieFileId"" > 0 THEN m.""Id"" END) AS HasFileCount,
+                                 COALESCE((SELECT SUM(mf.""Size"")
+                                           FROM ""MovieFiles"" mf
+                                           JOIN ""Movies"" m2 ON m2.""Id"" = mf.""MovieId""
+                                           WHERE m2.""MovieMetadataId"" IN (SELECT DISTINCT mm2.""Id""
+                                                                            FROM ""MovieMetadata"" mm2
+                                                                            WHERE mm2.""StudioForeignId"" = mm.""StudioForeignId"")), 0) AS SizeOnDisk,
+                                 {yearsSelect} AS Years
+                          FROM ""MovieMetadata"" mm
+                          JOIN ""Movies"" m ON m.""MovieMetadataId"" = mm.""Id""
+                          WHERE mm.""StudioForeignId"" IS NOT NULL AND mm.""StudioForeignId"" IN ({inClause})
+                          GROUP BY mm.""StudioForeignId"", mm.""ItemType""",
+                        parameters).ToList());
+                }
             }
 
-            var inClause = string.Join(", ", placeholders);
-
-            using (var conn = _database.OpenConnection())
-            {
-                return conn.Query<PerformerMovieCount>(
-                    $@"SELECT c.""PerformerForeignId"",
-                             mm.""ItemType"" AS ItemType,
-                             COUNT(DISTINCT m.""Id"") AS TotalCount,
-                             COUNT(DISTINCT CASE WHEN m.""MovieFileId"" > 0 THEN m.""Id"" END) AS HasFileCount,
-                             COALESCE((SELECT SUM(mf.""Size"")
-                                       FROM ""MovieFiles"" mf
-                                       JOIN ""Movies"" m2 ON m2.""Id"" = mf.""MovieId""
-                                       WHERE m2.""MovieMetadataId"" IN (SELECT DISTINCT c2.""MovieMetadataId""
-                                                                        FROM ""Credits"" c2
-                                                                        WHERE c2.""PerformerForeignId"" = c.""PerformerForeignId"")), 0) AS SizeOnDisk
-                      FROM ""Credits"" c
-                      JOIN ""Movies"" m ON m.""MovieMetadataId"" = c.""MovieMetadataId""
-                      JOIN ""MovieMetadata"" mm ON mm.""Id"" = m.""MovieMetadataId""
-                      WHERE c.""PerformerForeignId"" IN ({inClause})
-                      GROUP BY c.""PerformerForeignId"", mm.""ItemType""",
-                    parameters).ToList();
-            }
+            return results;
         }
 
         public Movie FindByTpdbId(string tpdbid)
