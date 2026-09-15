@@ -1,9 +1,10 @@
 import { push } from 'connected-react-router';
 import _ from 'lodash';
-import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
+import { Error } from 'App/State/AppSectionState';
+import AppState from 'App/State/AppState';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import NotFound from 'Components/NotFound';
 import PageContent from 'Components/Page/PageContent';
@@ -15,18 +16,36 @@ import translate from 'Utilities/String/translate';
 import MovieDetailsConnector from './MovieDetailsConnector';
 import styles from './MovieDetails.css';
 
+interface MatchParams {
+  titleSlug: string;
+}
+
+interface MovieDetailsPageProps {
+  match: { params: MatchParams };
+
+  // Set when the movie/scene is found in the store; null while loading or
+  // when the detail request did not find it.
+  titleSlug: string | null;
+  itemType?: string;
+  isFetching: boolean;
+  isPopulated: boolean;
+  error?: Error;
+  push: (path: string) => void;
+  fetchRootFolders: () => void;
+  fetchMovieDetail: (payload: { titleSlug: string }) => void;
+}
+
+interface MatchProps {
+  match: { params: MatchParams };
+}
+
 function createMapStateToProps() {
   return createSelector(
-    (state, { match }) => match,
-    (state) => state.movies,
+    (_state: AppState, ownProps: MatchProps) => ownProps.match,
+    (state: AppState) => state.movies,
     (match, movies) => {
       const titleSlug = match.params.titleSlug;
-      const {
-        isFetching,
-        isPopulated,
-        items,
-        detailRequests
-      } = movies;
+      const { isFetching, isPopulated, items, detailRequests } = movies;
 
       const movieIndex = _.findIndex(items, { titleSlug });
 
@@ -36,19 +55,23 @@ function createMapStateToProps() {
           isFetching,
           isPopulated,
           itemType,
-          titleSlug
+          titleSlug,
         };
       }
 
       // The full catalog isn't loaded; fall back to the per-slug detail
       // request state (see FETCH_MOVIE_DETAIL).
-      const detail = detailRequests[titleSlug] || {};
+      const detail = detailRequests[titleSlug] || {
+        isFetching: false,
+        isPopulated: false,
+        error: undefined,
+      };
 
       return {
-        isFetching: detail.isFetching || false,
-        isPopulated: detail.isPopulated || false,
-        error: detail.error,
-        titleSlug: null
+        isFetching: detail.isFetching,
+        isPopulated: detail.isPopulated,
+        error: detail.error as Error | undefined,
+        titleSlug: null,
       };
     }
   );
@@ -57,11 +80,10 @@ function createMapStateToProps() {
 const mapDispatchToProps = {
   push,
   fetchRootFolders,
-  fetchMovieDetail
+  fetchMovieDetail,
 };
 
-class MovieDetailsPageConnector extends Component {
-
+class MovieDetailsPageConnector extends Component<MovieDetailsPageProps> {
   //
   // Lifecycle
 
@@ -70,7 +92,7 @@ class MovieDetailsPageConnector extends Component {
     this.fetchDetail();
   }
 
-  componentDidUpdate(prevProps) {
+  componentDidUpdate(prevProps: MovieDetailsPageProps) {
     const { match } = this.props;
 
     if (prevProps.match.params.titleSlug !== match.params.titleSlug) {
@@ -110,12 +132,7 @@ class MovieDetailsPageConnector extends Component {
   // Render
 
   render() {
-    const {
-      titleSlug,
-      isFetching,
-      isPopulated,
-      error
-    } = this.props;
+    const { titleSlug, isFetching, isPopulated, error } = this.props;
 
     if (isFetching && !isPopulated) {
       return (
@@ -136,31 +153,14 @@ class MovieDetailsPageConnector extends Component {
     }
 
     if (!titleSlug) {
-      return (
-        <NotFound
-          message={translate('SorryThatMovieCannotBeFound')}
-        />
-      );
+      return <NotFound message={translate('SorryThatMovieCannotBeFound')} />;
     }
 
-    return (
-      <MovieDetailsConnector
-        titleSlug={titleSlug}
-      />
-    );
+    return <MovieDetailsConnector titleSlug={titleSlug} />;
   }
 }
 
-MovieDetailsPageConnector.propTypes = {
-  itemType: PropTypes.string,
-  titleSlug: PropTypes.string,
-  isFetching: PropTypes.bool.isRequired,
-  isPopulated: PropTypes.bool.isRequired,
-  error: PropTypes.object,
-  match: PropTypes.shape({ params: PropTypes.shape({ titleSlug: PropTypes.string.isRequired }).isRequired }).isRequired,
-  push: PropTypes.func.isRequired,
-  fetchRootFolders: PropTypes.func.isRequired,
-  fetchMovieDetail: PropTypes.func.isRequired
-};
-
-export default connect(createMapStateToProps, mapDispatchToProps)(MovieDetailsPageConnector);
+export default connect(
+  createMapStateToProps,
+  mapDispatchToProps
+)(MovieDetailsPageConnector);

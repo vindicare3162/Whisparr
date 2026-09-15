@@ -372,7 +372,12 @@ namespace Whisparr.Api.V3.Movies
                 moviesResources.Add(movie.ToResource(availDelay, _qualityUpgradableSpecification));
             }
 
-            if (!excludeCredits)
+            // ToResource maps MovieMetadata.Credits (joined in the query), so strip them here.
+            if (excludeCredits)
+            {
+                moviesResources.ForEach(m => m.Credits = null);
+            }
+            else
             {
                 LinkCredits(movies, moviesResources);
             }

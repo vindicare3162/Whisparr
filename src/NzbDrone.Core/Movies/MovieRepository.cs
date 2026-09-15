@@ -319,6 +319,11 @@ namespace NzbDrone.Core.Movies
                 }).AsList();
         }
 
+        // Watch-point (issue #39): the SizeOnDisk subquery is correlated per
+        // performer group and the IN clause is expanded manually (ADR-002).
+        // Measured ~84ms for ~10k performers (ADR-001); if this regresses at
+        // larger library sizes, rewrite as a single GROUP BY join over
+        // Credits -> Movies -> MovieFiles and re-measure.
         public List<PerformerMovieCount> GetPerformerMovieCounts(List<string> performerForeignIds)
         {
             var results = new List<PerformerMovieCount>();
