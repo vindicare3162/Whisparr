@@ -1,5 +1,55 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (3): Deployment + issues #34, #37 (stage 1), #36, #39
+
+### Deployment (local Docker, per DEPLOYMENT.local.md)
+
+- Rebuilt `whisparr-local:latest` from `Dockerfile.local-test` and recreated the `whisparr`
+  container on `whisparr-net` (port 6969, same volumes/env as documented).
+- **Gotcha hit:** `docker run` failed with `error while creating mount source path
+  '/run/desktop/mnt/host/i': file exists` (stale Docker Desktop WSL mount for drive I:).
+  Fixed by `wsl --shutdown` (Docker Desktop auto-restarts the engine), then re-started the
+  other containers (`sabnzbd`, `whisparr-postgres`, `stash-fulltest`, `stash-node-1`,
+  `nzbindexer-db-1`, `stash-pg` - none have restart policies) and recreated `whisparr`.
+- **Gotcha 2:** BuildKit cached the `COPY src` layer across builds even though source changed
+  (several "successful" builds shipped stale code). Verified inside the image with
+  `grep -a DetailByTitleSlug /app/bin/Whisparr.Api.V3.dll`; when in doubt use
+  `--no-cache-filter backend`. The deploy that matters uses the post-fix image.
+- Verified live (`X-Api-Key` auth, 59,522 library items): `updateMechanism=docker`,
+  `GET /movie/count` -> 59522, `GET /movie/detail/{titleSlug}` -> 200 with enriched credits +
+  statistics, `POST /movie/bulk?excludeCredits=true` strips credits.
+
+### Issue work
+
+1. **#34 (closed)** - `GET /movie/detail/{titleSlug}` backend endpoint (single resource,
+   full enrichment: credits, statistics, covers, root folder). Note: the API `titleSlug` IS the
+   `MovieMetadata.ForeignId` (StashDB ID) per the resource mapping. Frontend: `FETCH_MOVIE_DETAIL`
+   thunk with per-slug request state (`state.movies.detailRequests`); merged movie lands in
+   `state.movies.items` so detail connectors work unchanged. Detail pages no longer fetch the
+   full catalog. Also fixed a latent redirect bug: `componentDidUpdate` redirected away as soon
+   as the movie wasn't in items - now guarded to fire only after loading finished.
+2. **#37 (open, stage 1 done)** - the 198MB catalog payload is dominated by credits arrays on
+   every movie, which only the performer/studio detail flows use. `POST /movie/bulk` now accepts
+   `excludeCredits=true`; the index catalog fetch (FETCH_MOVIES) passes it, performer/studio
+   on-demand fetches keep credits. **Full server-side paging remains open** - it requires
+   reworking the client-side collection architecture (filters/sort/select-all/jump-bar across
+   table/posters/overview views) and is too large to land untested.
+3. **#36 (open)** - converted `MovieDetailsPageConnector.js` -> `.tsx` with typed props
+   (PropTypes removed); webpack resolves `.ts/.tsx` before `.js` so importers unchanged.
+4. **#39 (closed)** - watch-point comment added on
+   `MovieRepository.GetPerformerMovieCounts` (measured ~84ms, rewrite plan documented in code
+   and ADR-001). Re-open or file a new issue if the query regresses at larger library sizes.
+
+### Verification
+
+- Backend build 0 warnings/0 errors; frontend tsc clean for touched files; ESLint clean.
+- Live API checks above (curl - note: PowerShell `Invoke-RestMethod` showed intermittent 401s
+  against the API that curl does not reproduce; server-side auth is fine).
+
+---
+
+## 2026-09-15 (2): On-demand movie count + search-on-focus + shared TagsModalContent (issues #33, #38)
+
 ## 2026-09-15 (2): On-demand movie count + search-on-focus + shared TagsModalContent (issues #33, #38)
 
 ### What was done
