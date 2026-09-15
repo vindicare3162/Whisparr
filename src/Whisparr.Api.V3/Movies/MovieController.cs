@@ -342,11 +342,21 @@ namespace Whisparr.Api.V3.Movies
         }
 
         [HttpPost("bulk")]
-        public List<MovieResource> GetResourceByIds([FromBody] List<int> ids)
+        public List<MovieResource> GetResourceByIds([FromBody] List<int> ids, [FromQuery] bool excludeCredits = false)
         {
             if (_useCache)
             {
-                return GetMovieResources(ids);
+                var resources = GetMovieResources(ids);
+
+                // The index catalog doesn't need credits (only the performer/studio
+                // detail pages do) - stripping them there cuts the payload roughly in
+                // half for large libraries.
+                if (excludeCredits)
+                {
+                    resources.ForEach(m => m.Credits = null);
+                }
+
+                return resources;
             }
 
             var moviesResources = new List<MovieResource>();
@@ -362,7 +372,11 @@ namespace Whisparr.Api.V3.Movies
                 moviesResources.Add(movie.ToResource(availDelay, _qualityUpgradableSpecification));
             }
 
-            LinkCredits(movies, moviesResources);
+            if (!excludeCredits)
+            {
+                LinkCredits(movies, moviesResources);
+            }
+
             LinkMovieStatistics(moviesResources, sdict);
             MapCoversToLocal(moviesResources, coverFileInfos);
 

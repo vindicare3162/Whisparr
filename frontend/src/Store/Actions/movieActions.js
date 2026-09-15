@@ -417,7 +417,9 @@ export const actionHandlers = handleThunks({
         const chunk = movieids.slice(i, i + chunkSize);
 
         const promise = createAjaxRequest({
-          url: '/movie/bulk',
+          // Credits are not needed by the index pages and roughly double the
+          // payload; the performer/studio detail fetches keep them.
+          url: '/movie/bulk?excludeCredits=true',
           method: 'POST',
           contentType: 'application/json',
           dataType: 'json',
