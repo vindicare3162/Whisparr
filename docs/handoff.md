@@ -1,5 +1,26 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (5): #36 TS conversion - AddNew connectors + parseUrl
+
+- Converted the four `AddNew*Connector` files (Movie/Scene/Performer/Studio) to `.tsx` with
+  typed props (PropTypes removed, `noImplicitAny`-safe) - these are the consumers of the
+  on-demand `fetchMovieCount` added in #33.
+- Converted `parseUrl.js` -> `.ts` with a `ParsedUrl` interface. Gotcha: TS inference on the
+  original JS hid the `params` field (added via property mutation after object creation), which
+  is exactly the kind of latent bug the migration exists to surface.
+- New `AddMovieAppState` type; `AppState` now includes `addMovie` and `router` slices;
+  minimal `typings/qs.d.ts` module declaration (qs ships no types).
+- Verified: `tsc --noEmit` clean, ESLint clean, webpack production build (fork-ts-checker)
+  passed inside the Docker build, container redeployed and API smoke-tested (count/paged/detail
+  all healthy; library actively importing, 59,526 items).
+
+Remaining #36 candidates: `movieActions.js` (largest on-demand surface - needs thunk/handler
+typing), detail connectors, then index views.
+
+---
+
+## 2026-09-15 (4): #37 measurements + `GET /movie/paged` endpoint, redeployed
+
 ## 2026-09-15 (4): #37 measurements + `GET /movie/paged` endpoint, redeployed
 
 ### Payload measurements (live, 59,522-item library)
