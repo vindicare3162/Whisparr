@@ -8,8 +8,8 @@ import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import NotFound from 'Components/NotFound';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
+import { fetchMovieDetail } from 'Store/Actions/movieActions';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
-import { fetchMovies } from 'Store/Actions/movieActions';
 import getErrorMessage from 'Utilities/Object/getErrorMessage';
 import translate from 'Utilities/String/translate';
 import MovieDetailsConnector from './MovieDetailsConnector';
@@ -24,8 +24,8 @@ function createMapStateToProps() {
       const {
         isFetching,
         isPopulated,
-        error,
-        items
+        items,
+        detailRequests
       } = movies;
 
       const movieIndex = _.findIndex(items, { titleSlug });
@@ -40,10 +40,15 @@ function createMapStateToProps() {
         };
       }
 
+      // The full catalog isn't loaded; fall back to the per-slug detail
+      // request state (see FETCH_MOVIE_DETAIL).
+      const detail = detailRequests[titleSlug] || {};
+
       return {
-        isFetching,
-        isPopulated,
-        error
+        isFetching: detail.isFetching || false,
+        isPopulated: detail.isPopulated || false,
+        error: detail.error,
+        titleSlug: null
       };
     }
   );
@@ -52,7 +57,7 @@ function createMapStateToProps() {
 const mapDispatchToProps = {
   push,
   fetchRootFolders,
-  fetchMovies
+  fetchMovieDetail
 };
 
 class MovieDetailsPageConnector extends Component {
@@ -62,17 +67,42 @@ class MovieDetailsPageConnector extends Component {
 
   componentDidMount() {
     this.props.fetchRootFolders();
-    this.props.fetchMovies();
+    this.fetchDetail();
   }
 
   componentDidUpdate(prevProps) {
+    const { match } = this.props;
+
+    if (prevProps.match.params.titleSlug !== match.params.titleSlug) {
+      this.fetchDetail();
+    }
+
     if (!this.props.titleSlug) {
+      // Only redirect away once loading has actually finished and the
+      // movie/scene isn't in the store - while a detail request is in
+      // flight (or failed with an error) the loading/error states render.
+      if (this.props.isFetching || !!this.props.error) {
+        return;
+      }
+
+      if (!this.props.isPopulated) {
+        return;
+      }
+
       if (prevProps.itemType === 'scene') {
         this.props.push(`${window.Whisparr.urlBase}/`);
       } else {
         this.props.push(`${window.Whisparr.urlBase}/movies`);
       }
       return;
+    }
+  }
+
+  fetchDetail() {
+    const { titleSlug } = this.props.match.params;
+
+    if (titleSlug) {
+      this.props.fetchMovieDetail({ titleSlug });
     }
   }
 
@@ -130,7 +160,7 @@ MovieDetailsPageConnector.propTypes = {
   match: PropTypes.shape({ params: PropTypes.shape({ titleSlug: PropTypes.string.isRequired }).isRequired }).isRequired,
   push: PropTypes.func.isRequired,
   fetchRootFolders: PropTypes.func.isRequired,
-  fetchMovies: PropTypes.func.isRequired
+  fetchMovieDetail: PropTypes.func.isRequired
 };
 
 export default connect(createMapStateToProps, mapDispatchToProps)(MovieDetailsPageConnector);

@@ -278,6 +278,33 @@ namespace Whisparr.Api.V3.Movies
             return _moviesService.Count();
         }
 
+        // Single movie/scene detail by titleSlug so the detail page doesn't have to download the
+        // full catalog. Same enrichment as /movie/bulk: credits, statistics, local covers,
+        // root folder path.
+        [HttpGet("detail/{titleSlug}")]
+        public ActionResult<MovieResource> DetailByTitleSlug(string titleSlug)
+        {
+            var movie = _moviesService.FindByTitleSlug(titleSlug);
+
+            if (movie == null)
+            {
+                return NotFound($"No movie/scene with titleSlug '{titleSlug}'.");
+            }
+
+            var resource = MapToResource(movie);
+            var movies = new List<Movie> { movie };
+            var moviesResources = new List<MovieResource> { resource };
+
+            LinkCredits(movies, moviesResources);
+
+            var coverFileInfos = _coverMapper.GetMovieCoverFileInfos();
+            MapCoversToLocal(moviesResources, coverFileInfos);
+
+            resource.RootFolderPath = _rootFolderService.GetBestRootFolderPath(resource.Path);
+
+            return resource;
+        }
+
         // Added to support bulk monitor from Studio and eventually Performer detail page groupings
         [HttpPatch("bulk/monitor")]
         public IActionResult SetMoviesMonitored([FromBody] List<int> ids, [FromQuery] bool? monitored)

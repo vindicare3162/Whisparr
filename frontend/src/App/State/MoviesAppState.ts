@@ -72,6 +72,13 @@ interface MoviesAppState
   // Lightweight total from GET /movie/count, fetched on demand (e.g. by the
   // Add New pages). null until first fetched.
   count: number | null;
+
+  // Per-titleSlug request state for GET /movie/detail/{titleSlug}, used by
+  // the movie/scene detail pages so they don't need the full catalog.
+  detailRequests: Record<
+    string,
+    { isFetching: boolean; isPopulated: boolean; error: unknown }
+  >;
 }
 
 export default MoviesAppState;

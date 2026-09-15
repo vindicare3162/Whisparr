@@ -21,6 +21,7 @@ namespace NzbDrone.Core.Movies
         Movie FindByImdbId(string imdbid);
         Movie FindByTmdbId(int tmdbid);
         Movie FindByForeignId(string foreignId);
+        Movie FindByTitleSlug(string titleSlug);
         List<Movie> FindByTpdbId(List<string> tpdbids);
         List<Movie> FindByTmdbId(List<int> tmdbids);
         List<Movie> FindByStudioAndDate(string studioForeignId, string date);
@@ -442,6 +443,13 @@ namespace NzbDrone.Core.Movies
         public Movie FindByForeignId(string foreignId)
         {
             return Query(x => x.MovieMetadata.Value.ForeignId == foreignId).FirstOrDefault();
+        }
+
+        // The API's titleSlug is the MovieMetadata ForeignId (StashDB ID) - see
+        // MovieResource mapping (TitleSlug = MovieMetadata.ForeignId).
+        public Movie FindByTitleSlug(string titleSlug)
+        {
+            return Query(x => x.MovieMetadata.Value.ForeignId == titleSlug).FirstOrDefault();
         }
 
         public List<Movie> FindByTpdbId(List<string> tpdbids)

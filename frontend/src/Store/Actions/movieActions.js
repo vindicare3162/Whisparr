@@ -266,6 +266,9 @@ export const defaultState = {
   // Add New pages for the "already exists" banner) so they don't need the
   // full catalog. null until first fetched.
   count: null,
+  // Per-titleSlug request state for GET /movie/detail/{titleSlug}, used by
+  // the movie/scene detail pages so they don't need the full catalog.
+  detailRequests: {},
   sortKey: 'sortTitle',
   sortDirection: sortDirections.ASCENDING,
   pendingChanges: {},
@@ -285,6 +288,7 @@ export const persistState = [
 
 export const FETCH_MOVIES = 'movies/fetchMovies';
 export const FETCH_MOVIE_COUNT = 'movies/fetchMovieCount';
+export const FETCH_MOVIE_DETAIL = 'movies/fetchMovieDetail';
 export const FETCH_MOVIES_BY_PERFORMER = 'movies/fetchMoviesByPerformer';
 export const SET_PERFORMER_MOVIES = 'movies/setPerformerMovies';
 export const FETCH_MOVIES_BY_STUDIO = 'movies/fetchMoviesByStudio';
@@ -306,6 +310,7 @@ export const TOGGLE_MOVIE_MONITORED = 'movies/toggleMovieMonitored';
 
 export const fetchMovies = createThunk(FETCH_MOVIES);
 export const fetchMovieCount = createThunk(FETCH_MOVIE_COUNT);
+export const fetchMovieDetail = createThunk(FETCH_MOVIE_DETAIL);
 export const fetchMoviesByPerformer = createThunk(FETCH_MOVIES_BY_PERFORMER);
 export const setPerformerMovies = createAction(SET_PERFORMER_MOVIES);
 export const fetchMoviesByStudio = createThunk(FETCH_MOVIES_BY_STUDIO);
@@ -486,6 +491,74 @@ export const actionHandlers = handleThunks({
         isFetching: false,
         isPopulated: false,
         error: xhr.aborted ? null : xhr
+      }));
+    });
+
+    return abortRequest;
+  },
+
+  [FETCH_MOVIE_DETAIL]: (getState, payload, dispatch) => {
+    const { titleSlug } = payload;
+
+    dispatch(set({
+      section,
+      detailRequests: {
+        ...getState().movies.detailRequests,
+        [titleSlug]: {
+          isFetching: true,
+          isPopulated: false,
+          error: null
+        }
+      }
+    }));
+
+    const { request, abortRequest } = createAjaxRequest({
+      url: `/movie/detail/${titleSlug}`
+    });
+
+    request.done((data) => {
+      try {
+        // Merge the single movie into items so the detail connectors (which
+        // read state.movies.items) find it; track per-slug request state.
+        dispatch(batchActions([
+          update({ section, data: [data] }),
+
+          set({
+            section,
+            detailRequests: {
+              ...getState().movies.detailRequests,
+              [titleSlug]: {
+                isFetching: false,
+                isPopulated: true,
+                error: null
+              }
+            }
+          })
+        ]));
+      } catch (error) {
+        dispatch(set({
+          section,
+          detailRequests: {
+            ...getState().movies.detailRequests,
+            [titleSlug]: {
+              isFetching: false,
+              isPopulated: false,
+              error
+            }
+          }
+        }));
+      }
+    }).fail((xhr) => {
+      dispatch(set({
+        section,
+        detailRequests: {
+          ...getState().movies.detailRequests,
+          [titleSlug]: {
+            isFetching: false,
+            isPopulated: false,
+            error: xhr.aborted ? null : xhr
+          }
+        }
       }));
     });
 
