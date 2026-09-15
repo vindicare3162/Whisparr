@@ -1,20 +1,34 @@
-import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
-import { clearAddMovie, lookupPerformer } from 'Store/Actions/addMovieActions';
+import AppState from 'App/State/AppState';
+import { clearAddMovie, lookupStudio } from 'Store/Actions/addMovieActions';
 import { fetchMovieCount } from 'Store/Actions/movieActions';
-import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
+import {
+  clearQueueDetails,
+  fetchQueueDetails,
+} from 'Store/Actions/queueActions';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
 import createUISettingsSelector from 'Store/Selectors/createUISettingsSelector';
 import parseUrl from 'Utilities/String/parseUrl';
-import AddNewPerformer from './AddNewPerformer';
+import AddNewStudio from './AddNewScene';
+
+interface AddNewStudioConnectorProps {
+  term?: string;
+  items: Array<{ id: number; [key: string]: unknown }>;
+  lookupStudio: (payload: { term: string }) => void;
+  clearAddMovie: () => void;
+  fetchMovieCount: () => void;
+  fetchRootFolders: () => void;
+  fetchQueueDetails: () => void;
+  clearQueueDetails: () => void;
+}
 
 function createMapStateToProps() {
   return createSelector(
-    (state) => state.addMovie,
-    (state) => state.movies.count,
-    (state) => state.router.location,
+    (state: AppState) => state.addMovie,
+    (state: AppState) => state.movies.count,
+    (state: AppState) => state.router.location,
     createUISettingsSelector(),
     (addMovie, existingMoviesCount, location, uiSettings) => {
       const { params } = parseUrl(location.search);
@@ -22,32 +36,25 @@ function createMapStateToProps() {
       return {
         ...addMovie,
         term: params.term,
-        hasExistingMovies: existingMoviesCount > 0,
-        colorImpairedMode: uiSettings.enableColorImpairedMode
+        hasExistingMovies: (existingMoviesCount ?? 0) > 0,
+        colorImpairedMode: uiSettings.enableColorImpairedMode,
       };
     }
   );
 }
 
 const mapDispatchToProps = {
-  lookupPerformer,
+  lookupStudio,
   clearAddMovie,
   fetchMovieCount,
   fetchRootFolders,
   fetchQueueDetails,
-  clearQueueDetails
+  clearQueueDetails,
 };
 
-class AddNewPerformerConnector extends Component {
-
+class AddNewStudioConnector extends Component<AddNewStudioConnectorProps> {
   //
   // Lifecycle
-
-  constructor(props, context) {
-    super(props, context);
-
-    this._movieLookupTimeout = null;
-  }
 
   componentDidMount() {
     this.props.fetchRootFolders();
@@ -64,10 +71,12 @@ class AddNewPerformerConnector extends Component {
     this.props.clearQueueDetails();
   }
 
+  private _movieLookupTimeout: ReturnType<typeof setTimeout> | null = null;
+
   //
   // Listeners
 
-  onMovieLookupChange = (term) => {
+  onMovieLookupChange = (term: string) => {
     if (this._movieLookupTimeout) {
       clearTimeout(this._movieLookupTimeout);
     }
@@ -76,7 +85,7 @@ class AddNewPerformerConnector extends Component {
       this.props.clearAddMovie();
     } else {
       this._movieLookupTimeout = setTimeout(() => {
-        this.props.lookupPerformer({ term });
+        this.props.lookupStudio({ term });
       }, 300);
     }
   };
@@ -89,13 +98,10 @@ class AddNewPerformerConnector extends Component {
   // Render
 
   render() {
-    const {
-      term,
-      ...otherProps
-    } = this.props;
+    const { term, ...otherProps } = this.props;
 
     return (
-      <AddNewPerformer
+      <AddNewStudio
         term={term}
         {...otherProps}
         onMovieLookupChange={this.onMovieLookupChange}
@@ -105,14 +111,7 @@ class AddNewPerformerConnector extends Component {
   }
 }
 
-AddNewPerformerConnector.propTypes = {
-  term: PropTypes.string,
-  lookupPerformer: PropTypes.func.isRequired,
-  clearAddMovie: PropTypes.func.isRequired,
-  fetchMovieCount: PropTypes.func.isRequired,
-  fetchRootFolders: PropTypes.func.isRequired,
-  fetchQueueDetails: PropTypes.func.isRequired,
-  clearQueueDetails: PropTypes.func.isRequired
-};
-
-export default connect(createMapStateToProps, mapDispatchToProps)(AddNewPerformerConnector);
+export default connect(
+  createMapStateToProps,
+  mapDispatchToProps
+)(AddNewStudioConnector);

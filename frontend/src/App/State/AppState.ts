@@ -1,3 +1,4 @@
+import AddMovieAppState from './AddMovieAppState';
 import { Error } from './AppSectionState';
 import BlocklistAppState from './BlocklistAppState';
 import CalendarAppState from './CalendarAppState';
@@ -87,6 +88,15 @@ export interface AppSectionState {
   messages: MessagesAppState;
 }
 
+export interface RouterAppState {
+  location: {
+    search: string;
+    pathname: string;
+    hash?: string;
+    state?: unknown;
+  };
+}
+
 interface AppState {
   app: AppSectionState;
   blocklist: BlocklistAppState;
@@ -119,6 +129,8 @@ interface AppState {
   system: SystemAppState;
   tags: TagsAppState;
   wanted: WantedAppState;
+  addMovie: AddMovieAppState;
+  router: RouterAppState;
 }
 
 export default AppState;

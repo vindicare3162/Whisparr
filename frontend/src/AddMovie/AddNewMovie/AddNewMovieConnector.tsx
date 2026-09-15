@@ -1,11 +1,17 @@
-import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { createSelector } from 'reselect';
+import AppState from 'App/State/AppState';
 import { clearAddMovie, lookupMovie } from 'Store/Actions/addMovieActions';
 import { fetchMovieCount } from 'Store/Actions/movieActions';
-import { clearMovieFiles, fetchMovieFiles } from 'Store/Actions/movieFileActions';
-import { clearQueueDetails, fetchQueueDetails } from 'Store/Actions/queueActions';
+import {
+  clearMovieFiles,
+  fetchMovieFiles,
+} from 'Store/Actions/movieFileActions';
+import {
+  clearQueueDetails,
+  fetchQueueDetails,
+} from 'Store/Actions/queueActions';
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
 import createUISettingsSelector from 'Store/Selectors/createUISettingsSelector';
 import hasDifferentItems from 'Utilities/Object/hasDifferentItems';
@@ -13,11 +19,30 @@ import selectUniqueIds from 'Utilities/Object/selectUniqueIds';
 import parseUrl from 'Utilities/String/parseUrl';
 import AddNewMovie from './AddNewMovie';
 
+interface AddMovieItem {
+  id: number;
+  internalId?: number;
+  [key: string]: unknown;
+}
+
+interface AddNewMovieConnectorProps {
+  term?: string;
+  items: AddMovieItem[];
+  lookupMovie: (payload: { term: string }) => void;
+  clearAddMovie: () => void;
+  fetchMovieCount: () => void;
+  fetchRootFolders: () => void;
+  fetchQueueDetails: () => void;
+  clearQueueDetails: () => void;
+  fetchMovieFiles: (payload: { movieId: number[] }) => void;
+  clearMovieFiles: () => void;
+}
+
 function createMapStateToProps() {
   return createSelector(
-    (state) => state.addMovie,
-    (state) => state.movies.count,
-    (state) => state.router.location,
+    (state: AppState) => state.addMovie,
+    (state: AppState) => state.movies.count,
+    (state: AppState) => state.router.location,
     createUISettingsSelector(),
     (addMovie, existingMoviesCount, location, uiSettings) => {
       const { params } = parseUrl(location.search);
@@ -25,8 +50,8 @@ function createMapStateToProps() {
       return {
         ...addMovie,
         term: params.term,
-        hasExistingMovies: existingMoviesCount > 0,
-        colorImpairedMode: uiSettings.enableColorImpairedMode
+        hasExistingMovies: (existingMoviesCount ?? 0) > 0,
+        colorImpairedMode: uiSettings.enableColorImpairedMode,
       };
     }
   );
@@ -40,19 +65,12 @@ const mapDispatchToProps = {
   fetchQueueDetails,
   clearQueueDetails,
   fetchMovieFiles,
-  clearMovieFiles
+  clearMovieFiles,
 };
 
-class AddNewMovieConnector extends Component {
-
+class AddNewMovieConnector extends Component<AddNewMovieConnectorProps> {
   //
   // Lifecycle
-
-  constructor(props, context) {
-    super(props, context);
-
-    this._movieLookupTimeout = null;
-  }
 
   componentDidMount() {
     this.props.fetchRootFolders();
@@ -60,13 +78,11 @@ class AddNewMovieConnector extends Component {
     this.props.fetchMovieCount();
   }
 
-  componentDidUpdate(prevProps) {
-    const {
-      items
-    } = this.props;
+  componentDidUpdate(prevProps: AddNewMovieConnectorProps) {
+    const { items } = this.props;
 
     if (hasDifferentItems(prevProps.items, items)) {
-      const movieIds = selectUniqueIds(items, 'internalId');
+      const movieIds = selectUniqueIds(items as never, 'internalId');
 
       if (movieIds.length) {
         this.props.fetchMovieFiles({ movieId: movieIds });
@@ -84,10 +100,12 @@ class AddNewMovieConnector extends Component {
     this.props.clearMovieFiles();
   }
 
+  private _movieLookupTimeout: ReturnType<typeof setTimeout> | null = null;
+
   //
   // Listeners
 
-  onMovieLookupChange = (term) => {
+  onMovieLookupChange = (term: string) => {
     if (this._movieLookupTimeout) {
       clearTimeout(this._movieLookupTimeout);
     }
@@ -109,10 +127,7 @@ class AddNewMovieConnector extends Component {
   // Render
 
   render() {
-    const {
-      term,
-      ...otherProps
-    } = this.props;
+    const { term, ...otherProps } = this.props;
 
     return (
       <AddNewMovie
@@ -125,17 +140,7 @@ class AddNewMovieConnector extends Component {
   }
 }
 
-AddNewMovieConnector.propTypes = {
-  term: PropTypes.string,
-  items: PropTypes.arrayOf(PropTypes.object).isRequired,
-  lookupMovie: PropTypes.func.isRequired,
-  clearAddMovie: PropTypes.func.isRequired,
-  fetchMovieCount: PropTypes.func.isRequired,
-  fetchRootFolders: PropTypes.func.isRequired,
-  fetchQueueDetails: PropTypes.func.isRequired,
-  clearQueueDetails: PropTypes.func.isRequired,
-  fetchMovieFiles: PropTypes.func.isRequired,
-  clearMovieFiles: PropTypes.func.isRequired
-};
-
-export default connect(createMapStateToProps, mapDispatchToProps)(AddNewMovieConnector);
+export default connect(
+  createMapStateToProps,
+  mapDispatchToProps
+)(AddNewMovieConnector);
