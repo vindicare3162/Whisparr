@@ -1,5 +1,51 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (6): Scenes index converted to server-side paging (#37 pilot, deployed)
+
+Per Option C agreed for #37: the **Scenes index** now uses `GET /movie/paged` server-side
+collection state; the **Movies index stays client-side** for comparison.
+
+### What changed (commit `201719b62`)
+
+- `sceneIndexActions.js`: full server-side collection conversion using the established
+  `createServerSideCollectionHandlers` pattern (fetch / first / previous / next / last /
+  exact-page / sort / filter) against `/movie/paged` with `itemType=scene`. A custom fetch
+  handler additionally merges the page records into `state.movies.items` so scene rows
+  (`createMovieSelectorForHook`) resolve.
+- Preset filters (All / Monitored / Unmonitored / Missing / Downloaded) map to server params
+  (`monitored`, `hasFile`, `itemType`).
+- Filter builder reduced to EQUAL-only server-supported props (monitored, year, added,
+  releaseDate, studio, quality profile). Range/contains/array filters are not offered - the
+  flattened query-param scheme cannot express them.
+- `SceneIndex.tsx`: `TablePager` added below all views; jump bar and library-wide footer
+  stats removed (they require the full catalog); sort menu trimmed to server-supported keys.
+- **Refresh button** unchanged semantics: `REFRESH_MOVIE` without ids refreshes the whole
+  library server-side (verified in RefreshMovieService).
+- **Search button pilot limitation**: outside select mode it searches only the current page
+  (the full catalog is no longer client-side); noted in code and needs a server-side
+  "search by filter" command if that matters.
+- Backend: `/movie/paged` gained `monitored`/`hasFile` filters and sort aliases (studio,
+  qualityProfileId, runtime, certification). **Gotcha:** the datastore ExpressionVisitor
+  cannot visit Conditional (ternary) expressions in FilterExpressions - use if/else branches.
+- Movies index untouched (client-side, full catalog) for side-by-side comparison.
+
+### Deployed & verified (live, 59,529+ scenes)
+
+- Page 1 (100 records, sortTitle asc, itemType=scene): OK
+- `monitored=true` -> 41,298; `hasFile=false` -> 59,466
+- `sortKey=studio` -> sorted by studio title; certification/runtime/qualityProfileId aliases added
+- UI serves; Movies index untouched
+
+### Pilot QA still needed (browser)
+
+- Scenes index loads instantly with pager; page/sort/filter navigation
+- Select-mode bulk edit on page items; Refresh All; Search (page-scoped)
+- Poster/overview views render the page correctly
+
+---
+
+## 2026-09-15 (5): #36 TS conversion - AddNew connectors + parseUrl
+
 ## 2026-09-15 (5): #36 TS conversion - AddNew connectors + parseUrl
 
 - Converted the four `AddNew*Connector` files (Movie/Scene/Performer/Studio) to `.tsx` with
