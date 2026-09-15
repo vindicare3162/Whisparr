@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using DryIoc.ImTools;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -12,20 +10,28 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.ImportLists.ImportExclusions;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.MediaFiles.Events;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies;
+using NzbDrone.Core.Movies.Events;
 using NzbDrone.Core.Movies.Studios;
 using NzbDrone.Core.Movies.Studios.Events;
 using NzbDrone.Core.MovieStats;
 using NzbDrone.SignalR;
+using Whisparr.Api.V3.Shared;
 using Whisparr.Http;
-using Whisparr.Http.REST;
 using Whisparr.Http.REST.Attributes;
 
 namespace Whisparr.Api.V3.Studios
 {
     [V3ApiController]
-    public class StudioController : RestControllerWithSignalR<StudioResource, Studio>, IHandle<StudioUpdatedEvent>
+    public class StudioController : RestControllerWithResourceCache<StudioResource, Studio>,
+        IHandle<StudioUpdatedEvent>,
+        IHandle<MoviesDeletedEvent>,
+        IHandle<MoviesImportedEvent>,
+        IHandle<MovieFileAddedEvent>,
+        IHandle<MovieFileDeletedEvent>,
+        IHandle<MovieFileUpdatedEvent>
     {
         private readonly IStudioService _studioService;
         private readonly IAddStudioService _addStudioService;
@@ -33,9 +39,7 @@ namespace Whisparr.Api.V3.Studios
         private readonly IMovieService _moviesService;
         private readonly IMovieStatisticsService _movieStatisticsService;
         private readonly IImportListExclusionService _exclusionService;
-        private readonly ICached<StudioResource> _studioResourceCache;
         private readonly bool _useCache;
-        private readonly Logger _logger;
 
         public StudioController(IStudioService studioService,
                                 IAddStudioService addStudioService,
@@ -47,7 +51,7 @@ namespace Whisparr.Api.V3.Studios
                                 IConfigService configService,
                                 Logger logger,
                                 IBroadcastSignalRMessage signalRBroadcaster)
-        : base(signalRBroadcaster)
+        : base(cacheManager.GetCache<StudioResource>(typeof(StudioResource), "studioResources"), logger, signalRBroadcaster)
         {
             _studioService = studioService;
             _addStudioService = addStudioService;
@@ -56,8 +60,6 @@ namespace Whisparr.Api.V3.Studios
             _movieStatisticsService = movieStatisticsService;
             _exclusionService = exclusionService;
             _useCache = configService.WhisparrCacheStudioAPI;
-            _studioResourceCache = cacheManager.GetCache<StudioResource>(typeof(StudioResource), "studioResources");
-            _logger = logger;
 
             if (configService.WhisparrMovieMetadataSource == MovieMetadataType.TMDB)
             {
@@ -94,11 +96,16 @@ namespace Whisparr.Api.V3.Studios
             {
                 if (stashId.IsNotNullOrWhiteSpace())
                 {
-                    studioResources.AddIfNotNull(GetStudioResource(stashId));
+                    var resource = GetCachedResource(stashId);
+
+                    if (resource != null)
+                    {
+                        studioResources.Add(resource);
+                    }
                 }
                 else
                 {
-                    studioResources = GetStudioResources();
+                    studioResources = GetCachedResources(AllResourceForeignIds());
                 }
             }
             else
@@ -109,7 +116,7 @@ namespace Whisparr.Api.V3.Studios
 
                     if (studio != null)
                     {
-                        studioResources.AddIfNotNull(studio.ToResource());
+                        studioResources.Add(studio.ToResource());
                     }
                 }
                 else
@@ -134,6 +141,9 @@ namespace Whisparr.Api.V3.Studios
         {
             var studio = _addStudioService.AddStudio(studioResource.ToModel());
 
+            // Clear any negative cache entry left by requests made before the studio existed.
+            InvalidateCachedResource(studio.ForeignId);
+
             return Created(studio.Id);
         }
 
@@ -146,7 +156,7 @@ namespace Whisparr.Api.V3.Studios
 
             var updatedStudio = _studioService.Update(resource.ToModel(studio));
 
-            _studioResourceCache.Remove(updatedStudio.ForeignId);
+            InvalidateCachedResource(updatedStudio.ForeignId);
             BroadcastResourceChange(ModelAction.Updated, updatedStudio.ToResource());
 
             return Accepted(updatedStudio);
@@ -164,7 +174,7 @@ namespace Whisparr.Api.V3.Studios
 
             // Get the scenes for the studio
             var scenes = _moviesService.GetByStudioForeignId(studio.ForeignId);
-            var sceneIds = scenes.Map(x => x.Id).ToList();
+            var sceneIds = scenes.Select(x => x.Id).ToList();
             _moviesService.DeleteMovies(sceneIds, deleteFiles);
 
             if (addImportExclusion)
@@ -178,8 +188,9 @@ namespace Whisparr.Api.V3.Studios
             }
 
             // Remove the studio now that the associated scenes have been removed
-            _studioResourceCache.Remove(studio.ForeignId);
             _studioService.RemoveStudio(studio);
+
+            InvalidateCachedResource(studio.ForeignId);
         }
 
         [NonAction]
@@ -187,151 +198,116 @@ namespace Whisparr.Api.V3.Studios
         {
             var resource = message.Studio.ToResource();
 
-            _studioResourceCache.Remove(resource.ForeignId);
+            InvalidateCachedResource(resource.ForeignId);
             FetchAndLinkMovies(resource);
             BroadcastResourceChange(ModelAction.Updated, message.Studio.ToResource());
         }
 
+        /// <summary>
+        /// Movie-library changes (deletions, imports, file add/delete/update) affect cached
+        /// studio counts and SizeOnDisk. Clear the whole cache: refilling is cheap (a handful
+        /// of batched queries) and mapping one movie to the many studios it links to via
+        /// credits would cost more than the refill.
+        /// </summary>
+        [NonAction]
+        public void Handle(MoviesDeletedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MoviesImportedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileAddedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileDeletedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileUpdatedEvent message) => InvalidateAllCachedResources();
+
         private void FetchAndLinkMovies(StudioResource resource)
         {
-            LinkMovies(resource, _moviesService.GetByStudioForeignId(resource.ForeignId));
+            LinkMovies(new List<StudioResource> { resource });
         }
 
-        private void LinkMovies(List<StudioResource> resources)
+        // Batch studio movie/stats linkage into a single aggregation query instead of loading every
+        // referenced movie into memory per studio (~3 queries per studio, run while holding the
+        // studio resource cache lock during cache fill). Mirrors the performer-side batch in
+        // PerformerController.LinkMovies.
+        protected override void LinkMovies(List<StudioResource> resources)
         {
-            foreach (var performer in resources)
+            if (resources.Count == 0)
             {
-                FetchAndLinkMovies(performer);
+                return;
             }
-        }
 
-        private void LinkMovies(StudioResource resource, List<Movie> movies)
-        {
-            var scenes = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Scene);
-            resource.HasScenes = scenes.Any();
-            resource.HasMovies = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Movie).Any();
+            var studioForeignIds = resources.Select(x => x.ForeignId).ToList();
+            var counts = _moviesService.GetStudioMovieCounts(studioForeignIds);
 
-            resource.Years = movies.OrderBy(x => x.Year).Map(x => x.Year).Distinct().ToList();
+            var countsByStudio = counts
+                .GroupBy(x => x.StudioForeignId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            resource.MovieCount = movies.Where(x => x.HasFile && x.MovieMetadata.Value.ItemType == ItemType.Movie).Count();
-            resource.TotalMovieCount = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Movie).Count();
-            resource.SceneCount = movies.Where(x => x.HasFile && x.MovieMetadata.Value.ItemType == ItemType.Scene).Count();
-            resource.TotalSceneCount = movies.Where(x => x.MovieMetadata.Value.ItemType == ItemType.Scene).Count();
-
-            var ids = movies.Map(x => x.Id).ToList();
-            var movieStats = _movieStatisticsService.MovieStatistics(ids);
-            resource.SizeOnDisk = movieStats.Sum(x => x.SizeOnDisk);
-        }
-
-        private StudioResource GetStudioResource(string studioForeignId)
-        {
-            var studioIds = new List<string> { studioForeignId };
-            return GetStudioResources(studioIds).FirstOrDefault();
-        }
-
-        private List<StudioResource> GetStudioResources()
-        {
-            var allStudioForeignIds = _studioService.AllStudioForeignIds();
-            return GetStudioResources(allStudioForeignIds);
-        }
-
-        private List<StudioResource> GetStudioResources(List<string> studioForeignIds)
-        {
-            var stopwatch = new Stopwatch();
-            stopwatch.Start();
-            _logger.Trace($"GetStudioResources: {studioForeignIds.Count} studios");
-
-            var studioResources = new List<StudioResource>();
-
-            var missingIds = new List<string>();
-            foreach (var id in studioForeignIds)
+            foreach (var resource in resources)
             {
-                var studioResource = _studioResourceCache.Find(id);
-                if (studioResource == null)
+                if (countsByStudio.TryGetValue(resource.ForeignId, out var studioCounts))
                 {
-                    missingIds.Add(id);
+                    LinkMovies(resource, studioCounts);
                 }
                 else
                 {
-                    studioResources.AddIfNotNull(studioResource);
+                    // No movies for this studio - zero out the counts so cached data stays consistent
+                    LinkMovies(resource, new List<StudioMovieCount>());
                 }
             }
+        }
 
-            if (missingIds.Count > 0)
-            {
-                var releaseLock = false;
-                var getIds = new List<string>();
+        private void LinkMovies(StudioResource resource, List<StudioMovieCount> counts)
+        {
+            var scenes = counts.Where(x => x.ItemType == (int)ItemType.Scene).ToList();
+            var movies = counts.Where(x => x.ItemType == (int)ItemType.Movie).ToList();
 
-                try
-                {
-                    _logger.Info($"Caching {missingIds.Count} studios with {_studioResourceCache.Lock.CurrentCount} available threads.");
+            resource.HasScenes = scenes.Any();
+            resource.HasMovies = movies.Any();
 
-                    // If there are a large number of missing IDs, acquire the lock to prevent cache stampede
-                    if (missingIds.Count > 100)
-                    {
-                        _studioResourceCache.Lock.Wait();
-                        releaseLock = true;
-                        if (stopwatch.Elapsed.TotalSeconds > 2)
-                        {
-                            _logger.Warn($"Locked studio cache for {stopwatch.Elapsed.TotalSeconds} seconds");
-                        }
+            resource.MovieCount = movies.Sum(x => x.HasFileCount);
+            resource.TotalMovieCount = movies.Sum(x => x.TotalCount);
+            resource.SceneCount = scenes.Sum(x => x.HasFileCount);
+            resource.TotalSceneCount = scenes.Sum(x => x.TotalCount);
 
-                        // Re-check missing IDs after acquiring the lock
-                        foreach (var id in missingIds)
-                        {
-                            var studioResource = _studioResourceCache.Find(id);
-                            if (studioResource == null)
-                            {
-                                getIds.Add(id);
-                            }
-                            else
-                            {
-                                studioResources.AddIfNotNull(studioResource);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        getIds = missingIds;
-                    }
+            // SizeOnDisk is the same across all ItemType groups for a studio, so take it once.
+            resource.SizeOnDisk = counts.Select(x => x.SizeOnDisk).FirstOrDefault();
 
-                    if (getIds.Count > 0)
-                    {
-                        var studios = _studioService.FindByForeignIds(getIds);
+            // Years is the same across all ItemType groups for a studio, so take it once.
+            var years = counts.Select(x => x.Years).FirstOrDefault(x => x.IsNotNullOrWhiteSpace());
 
-                        foreach (var studio in studios)
-                        {
-                            studioResources.AddIfNotNull(studio.ToResource());
-                        }
+            resource.Years = years.IsNullOrWhiteSpace()
+                ? new List<int>()
+                : years.Split(',').Select(int.Parse).ToList();
+        }
 
-                        var coverFileInfos = _coverMapper.GetStudioCoverFileInfos();
+        protected override List<string> AllResourceForeignIds()
+        {
+            return _studioService.AllStudioForeignIds();
+        }
 
-                        _coverMapper.ConvertToLocalStudioUrls(studioResources.Select(x => Tuple.Create(x.Id, x.Images.AsEnumerable())), coverFileInfos);
+        protected override List<StudioResource> BuildResources(List<string> foreignIds)
+        {
+            return _studioService.FindByForeignIds(foreignIds)
+                .Where(x => x != null)
+                .Select(x => x.ToResource())
+                .ToList();
+        }
 
-                        LinkMovies(studioResources);
+        protected override void ConvertToLocalUrls(List<StudioResource> newResources)
+        {
+            var coverFileInfos = _coverMapper.GetStudioCoverFileInfos();
 
-                        foreach (var studioResource in studioResources)
-                        {
-                            _studioResourceCache.Set(studioResource.ForeignId, studioResource);
-                        }
-                    }
-                }
-                finally
-                {
-                    stopwatch.Stop();
-                    if (releaseLock)
-                    {
-                        _studioResourceCache.Lock.Release();
-                    }
-                }
-            }
+            _coverMapper.ConvertToLocalStudioUrls(newResources.Select(x => Tuple.Create(x.Id, x.Images.AsEnumerable())), coverFileInfos);
+        }
 
-            if (stopwatch.Elapsed.TotalSeconds > 60)
-            {
-                _logger.Warn($"Processed studio cache for {studioForeignIds.Count} after {stopwatch.Elapsed.TotalSeconds} seconds");
-            }
-
-            return studioResources;
+        protected override string GetForeignId(StudioResource resource)
+        {
+            return resource.ForeignId;
         }
     }
 }

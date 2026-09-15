@@ -1,5 +1,85 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15: Resource-cache hardening PR (issues #28, #29, #30, #31, #32, #35)
+
+Implemented in one change set. See `CODE_REVIEW_REPORT.md` for the full review that produced
+these issues.
+
+### What was done
+
+1. **New shared base class** `src/Whisparr.Api.V3/Shared/RestControllerWithResourceCache.cs`
+   (`RestControllerWithResourceCache<TResource, TModel> : RestControllerWithSignalR<...>`).
+   The cache-fill algorithm now lives in exactly one place; `PerformerController` and
+   `StudioController` implement four hooks (`AllResourceForeignIds`, `BuildResources`,
+   `ConvertToLocalUrls`, `LinkMovies`) plus `GetForeignId`. Fixes the duplication reported in
+   issue #35 (A-1).
+2. **Bounded stampede protection** (#30): the fill now uses `Lock.Wait(TimeSpan.FromSeconds(10))`.
+   If the lock cannot be acquired in time it logs a warning and fills without it — a request
+   thread can never block indefinitely on the cache semaphore anymore.
+3. **Negative caching** (#28): foreign IDs that resolve to nothing in the library (e.g. credits
+   left behind after a performer delete) are cached as a default `TResource` sentinel
+   (detectable: `ForeignId` is null/empty) so they are not re-queried on every request.
+   `AddPerformer`/`AddStudio` invalidate the cache entry so a later-added resource replaces its
+   negative marker.
+4. **Fill work scoped to new resources** (#31): cover URL conversion and movie-count linkage run
+   only for freshly built (cache-miss) resources, not for the whole list including
+   already-cached entries.
+5. **Cache invalidation on library changes** (#29):
+   - `DeletePerformer`/`DeleteStudio` invalidate the deleted resource's cache entry.
+   - Both controllers now handle `MoviesDeletedEvent`, `MoviesImportedEvent`,
+     `MovieFileAddedEvent`, `MovieFileDeletedEvent`, `MovieFileUpdatedEvent` by clearing the
+     whole resource cache (`InvalidateAllCachedResources`). Rationale: refilling is cheap (a
+     handful of batched queries, ~84ms aggregation) and mapping one movie to the many
+     performers/studios it links to via credits would cost more than the refill.
+   - `AddPerformer`/`AddStudio` also invalidate (replaces possible negative cache marker).
+6. **DryIoc.ImTools removed from the API layer** (#35/A-2): the import existed for `AddIfNotNull`
+   and `Map`; both replaced with plain LINQ/null checks. `using Whisparr.Http.REST;` dropped
+   (IDE0005) from both controllers.
+7. **Log wording fixed** (#35/A-4): the misleading "Processed performer cache for {count}..."
+   warning is now "Processed {0} resources ({1} cache misses) in {2:F1} seconds".
+8. **Housekeeping** (#32/A-5): deleted `SABNZBD/sabnzbd_backup_5.1.2_2026.08.31_12.35.56.zip`
+   from the repo root, removed the empty `SABNZBD/` folder, and added `SABNZBD/` +
+   `*.backup.*.zip` ignore rules to `.gitignore`.
+
+### Verification
+
+- `dotnet build src/Whisparr.sln -p:NuGetAudit=false` → 0 warnings / 0 errors
+  (NuGetAudit=false only suppresses the **pre-existing** MailKit NU1902 vulnerability warning —
+  see "Known pre-existing issues" below).
+- `dotnet test src/NzbDrone.Api.Test` → 14/14 passed.
+- Behavior-preserving notes: performer-side zero-out semantics for studios with no movies were
+  NOT changed (performer link path still leaves counts null when the aggregation query returns
+  no row — same as before).
+
+### Known pre-existing issues (NOT fixed in this change)
+
+- `MailKit 4.13.0` NU1902 warning-as-error at restore time. CI builds must pass
+  `-p:NuGetAudit=false` or bump MailKit. Flagged for a future dependency-update PR.
+- The working tree contains unrelated WIP (uncommitted) from an earlier session:
+  `Dockerfile.local-test`, `Parser.cs`, `ParserTests`, `ReleaseTitleSpecification.cs`,
+  `MovieStatisticsRepository.cs`, `MovieRepository.cs`, `MovieService.cs`,
+  `AddPerformerService.cs`, `AddStudioService.cs`, `SceneReleaseTitleFixture.cs`, `IDEA.md`.
+  Those were deliberately NOT committed here. Note: the WIP versions of
+  `AddPerformerService.cs`/`AddStudioService.cs` previously failed SA1518 (no trailing newline)
+  — fixed in the working tree during this session; the WIP changes themselves still need
+  review + commit.
+- `_useCache` (issue A-3, no GitHub issue yet) is still snapshotted at controller construction.
+
+### Remaining open issues from the code review (tracked on GitHub)
+
+| Issue | Title | Status |
+|-------|-------|--------|
+| #33 | MovieSearchInput fetch-on-focus + AddNew existence check | open |
+| #34 | Detail pages fetch single item instead of full catalog | open |
+| #37 | Server-side paging for Movies/Scenes indexes | open |
+| #38 | Consolidate TagsModalContent ×4 + O(n²) lookup | open |
+| #39 | Watch correlated SizeOnDisk subquery at scale (note) | open |
+| #36 | Continue TS migration (tracking) | open |
+
+---
+
+# Previous handoff (2026-08-13)
+
 ## Completed work
 
 1. **Performer list N+1 fix** (commit `b504faa63`) — `PerformerController.LinkMovies(List<PerformerResource>)` batched from ~2 queries/performer (~19k DB round trips for 9,620 performers, 20-30s) to a single aggregation query. Added `MovieRepository.GetPerformerMovieCounts` computing counts + `SizeOnDisk` via one `Credits JOIN Movies JOIN MovieMetadata` grouped query (~84ms for all performers).

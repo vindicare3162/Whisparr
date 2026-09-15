@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using DryIoc.ImTools;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -12,21 +10,29 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.ImportLists.ImportExclusions;
 using NzbDrone.Core.MediaCover;
+using NzbDrone.Core.MediaFiles.Events;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Movies;
+using NzbDrone.Core.Movies.Events;
 using NzbDrone.Core.Movies.Performers;
 using NzbDrone.Core.Movies.Performers.Events;
 using NzbDrone.Core.MovieStats;
 using NzbDrone.SignalR;
+using Whisparr.Api.V3.Shared;
 using Whisparr.Http;
-using Whisparr.Http.REST;
 using Whisparr.Http.REST.Attributes;
 
 namespace Whisparr.Api.V3.Performers
 {
     /// <summary>Controller for managing performers in Whisparr</summary>
     [V3ApiController]
-    public class PerformerController : RestControllerWithSignalR<PerformerResource, Performer>, IHandle<PerformerUpdatedEvent>
+    public class PerformerController : RestControllerWithResourceCache<PerformerResource, Performer>,
+        IHandle<PerformerUpdatedEvent>,
+        IHandle<MoviesDeletedEvent>,
+        IHandle<MoviesImportedEvent>,
+        IHandle<MovieFileAddedEvent>,
+        IHandle<MovieFileDeletedEvent>,
+        IHandle<MovieFileUpdatedEvent>
     {
         private readonly IPerformerService _performerService;
         private readonly IAddPerformerService _addPerformerService;
@@ -36,8 +42,6 @@ namespace Whisparr.Api.V3.Performers
         private readonly IImportListExclusionService _exclusionService;
         private readonly IConfigService _configService;
         private readonly bool _useCache;
-        private readonly ICached<PerformerResource> _performerResourceCache;
-        private readonly Logger _logger;
 
         public PerformerController(IPerformerService performerService,
                                    IAddPerformerService addPerformerService,
@@ -49,7 +53,7 @@ namespace Whisparr.Api.V3.Performers
                                    IConfigService configService,
                                    Logger logger,
                                    IBroadcastSignalRMessage signalRBroadcaster)
-        : base(signalRBroadcaster)
+        : base(cacheManager.GetCache<PerformerResource>(typeof(PerformerResource), "performerResources"), logger, signalRBroadcaster)
         {
             _performerService = performerService;
             _addPerformerService = addPerformerService;
@@ -59,8 +63,6 @@ namespace Whisparr.Api.V3.Performers
             _movieStatisticsService = movieStatisticsService;
             _exclusionService = exclusionService;
             _useCache = _configService.WhisparrCachePerformerAPI;
-            _performerResourceCache = cacheManager.GetCache<PerformerResource>(typeof(PerformerResource), "performerResources");
-            _logger = logger;
 
             if (configService.WhisparrMovieMetadataSource == MovieMetadataType.TMDB)
             {
@@ -110,11 +112,16 @@ namespace Whisparr.Api.V3.Performers
             {
                 if (stashId.IsNotNullOrWhiteSpace())
                 {
-                    performerResources.AddIfNotNull(GetPerformerResource(stashId));
+                    var resource = GetCachedResource(stashId);
+
+                    if (resource != null)
+                    {
+                        performerResources.Add(resource);
+                    }
                 }
                 else
                 {
-                    performerResources = GetPerformerResources();
+                    performerResources = GetCachedResources(AllResourceForeignIds());
                 }
 
                 return performerResources;
@@ -127,7 +134,7 @@ namespace Whisparr.Api.V3.Performers
 
                     if (performer != null)
                     {
-                        performerResources.AddIfNotNull(performer.ToResource());
+                        performerResources.Add(performer.ToResource());
                     }
                 }
                 else
@@ -157,6 +164,9 @@ namespace Whisparr.Api.V3.Performers
         {
             var performer = _addPerformerService.AddPerformer(performerResource.ToModel());
 
+            // Clear any negative cache entry left by requests made before the performer existed.
+            InvalidateCachedResource(performer.ForeignId);
+
             return Created(performer.Id);
         }
 
@@ -175,7 +185,7 @@ namespace Whisparr.Api.V3.Performers
 
             var updatedPerformer = _performerService.Update(resource.ToModel(performer));
 
-            _performerResourceCache.Remove(updatedPerformer.ForeignId);
+            InvalidateCachedResource(updatedPerformer.ForeignId);
             BroadcastResourceChange(ModelAction.Updated, updatedPerformer.ToResource());
 
             return Accepted(updatedPerformer);
@@ -197,7 +207,7 @@ namespace Whisparr.Api.V3.Performers
 
             // Get the scenes for the performer
             var scenes = _moviesService.GetByPerformerForeignId(performer.ForeignId);
-            var sceneIds = scenes.Map(x => x.Id).ToList();
+            var sceneIds = scenes.Select(x => x.Id).ToList();
             _moviesService.DeleteMovies(sceneIds, deleteFiles);
 
             if (addImportExclusion)
@@ -212,6 +222,8 @@ namespace Whisparr.Api.V3.Performers
 
             // Remove the performer now that the associated scenes have been removed
             _performerService.RemovePerformer(performer);
+
+            InvalidateCachedResource(performer.ForeignId);
         }
 
         /// <summary>Handles performer updated events to update the performer cache and broadcast changes via SignalR</summary>
@@ -221,14 +233,35 @@ namespace Whisparr.Api.V3.Performers
             var resource = message.Performer.ToResource();
 
             FetchAndLinkMovies(resource);
-            _performerResourceCache.Remove(resource.ForeignId);
+            InvalidateCachedResource(resource.ForeignId);
             BroadcastResourceChange(ModelAction.Updated, resource);
         }
+
+        /// <summary>
+        /// Movie-library changes (deletions, imports, file add/delete/update) affect cached
+        /// performer counts and SizeOnDisk. Clear the whole cache: refilling is cheap (a handful
+        /// of batched queries) and mapping one movie to the many performers it links to via
+        /// credits would cost more than the refill.
+        /// </summary>
+        [NonAction]
+        public void Handle(MoviesDeletedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MoviesImportedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileAddedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileDeletedEvent message) => InvalidateAllCachedResources();
+
+        [NonAction]
+        public void Handle(MovieFileUpdatedEvent message) => InvalidateAllCachedResources();
 
         private void FetchAndLinkMovies(PerformerResource resource)
         {
             var movies = _moviesService.GetByPerformerForeignId(resource.ForeignId);
-            var movieStatsByMovieId = _movieStatisticsService.MovieStatistics(movies.Map(x => x.Id).ToList()).ToDictionary(x => x.MovieId);
+            var movieStatsByMovieId = _movieStatisticsService.MovieStatistics(movies.Select(x => x.Id).ToList()).ToDictionary(x => x.MovieId);
 
             LinkMovies(resource, movies, movieStatsByMovieId);
         }
@@ -236,7 +269,7 @@ namespace Whisparr.Api.V3.Performers
         // Batch performer movie/stats linkage into a single aggregation query instead of
         // loading every referenced movie into memory. The per-performer version caused
         // ~2x N queries (N being thousands in a typical library).
-        private void LinkMovies(List<PerformerResource> resources)
+        protected override void LinkMovies(List<PerformerResource> resources)
         {
             if (resources.Count == 0)
             {
@@ -290,115 +323,29 @@ namespace Whisparr.Api.V3.Performers
             resource.SizeOnDisk = movies.Sum(x => movieStatsByMovieId.TryGetValue(x.Id, out var stats) ? stats.SizeOnDisk : 0);
         }
 
-        private PerformerResource GetPerformerResource(string performerForeignId)
+        protected override List<string> AllResourceForeignIds()
         {
-            var performerForeignIds = new List<string> { performerForeignId };
-            return GetPerformerResources(performerForeignIds).FirstOrDefault();
+            return _performerService.AllPerformerForeignIds();
         }
 
-        private List<PerformerResource> GetPerformerResources()
+        protected override List<PerformerResource> BuildResources(List<string> foreignIds)
         {
-            var allPerformerForeignIds = _performerService.AllPerformerForeignIds();
-            return GetPerformerResources(allPerformerForeignIds);
+            return _performerService.FindByForeignIds(foreignIds)
+                .Where(x => x != null)
+                .Select(x => x.ToResource())
+                .ToList();
         }
 
-        private List<PerformerResource> GetPerformerResources(List<string> performerForeignIds)
+        protected override void ConvertToLocalUrls(List<PerformerResource> newResources)
         {
-            var stopwatch = new Stopwatch();
-            stopwatch.Start();
-            _logger.Trace($"GetPerformerResources: {performerForeignIds.Count} performers");
+            var coverFileInfos = _coverMapper.GetPerformerCoverFileInfos();
 
-            var performerResources = new List<PerformerResource>();
+            _coverMapper.ConvertToLocalPerformerUrls(newResources.Select(x => Tuple.Create(x.Id, x.Images.AsEnumerable())), coverFileInfos);
+        }
 
-            var missingIds = new List<string>();
-            foreach (var id in performerForeignIds)
-            {
-                var performerResource = _performerResourceCache.Find(id);
-                if (performerResource == null)
-                {
-                    missingIds.Add(id);
-                }
-                else
-                {
-                    performerResources.AddIfNotNull(performerResource);
-                }
-            }
-
-            if (missingIds.Count > 0)
-            {
-                var releaseLock = false;
-                var getIds = new List<string>();
-
-                try
-                {
-                    _logger.Info($"Caching {missingIds.Count} performers with {_performerResourceCache.Lock.CurrentCount} available threads.");
-
-                    // If there are a large number of missing IDs, acquire the lock to prevent cache stampede
-                    if (missingIds.Count > 100)
-                    {
-                        _performerResourceCache.Lock.Wait();
-                        releaseLock = true;
-                        if (stopwatch.Elapsed.TotalSeconds > 2)
-                        {
-                            _logger.Warn($"Locked performer cache for {stopwatch.Elapsed.TotalSeconds} seconds");
-                        }
-
-                        // recheck after acquiring the lock
-                        foreach (var id in missingIds)
-                        {
-                            var performerResource = _performerResourceCache.Find(id);
-                            if (performerResource == null)
-                            {
-                                getIds.Add(id);
-                            }
-                            else
-                            {
-                                performerResources.AddIfNotNull(performerResource);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        getIds = missingIds;
-                    }
-
-                    if (getIds.Count > 0)
-                    {
-                        var performers = _performerService.FindByForeignIds(getIds);
-
-                        foreach (var performer in performers)
-                        {
-                            performerResources.AddIfNotNull(performer.ToResource());
-                        }
-
-                        var coverFileInfos = _coverMapper.GetPerformerCoverFileInfos();
-
-                        _coverMapper.ConvertToLocalPerformerUrls(performerResources.Select(x => Tuple.Create(x.Id, x.Images.AsEnumerable())), coverFileInfos);
-
-                        LinkMovies(performerResources);
-
-                        foreach (var performerResource in performerResources)
-                        {
-                            _performerResourceCache.Set(performerResource.ForeignId, performerResource);
-                        }
-                    }
-                }
-                finally
-                {
-                    stopwatch.Stop();
-                    if (releaseLock)
-                    {
-                        _performerResourceCache.Lock.Release();
-                    }
-                }
-            }
-
-            if (stopwatch.Elapsed.TotalSeconds > 60)
-            {
-                _logger.Warn($"Processed performer cache for {performerForeignIds.Count} after {stopwatch.Elapsed.TotalSeconds} seconds");
-            }
-
-            return performerResources;
+        protected override string GetForeignId(PerformerResource resource)
+        {
+            return resource.ForeignId;
         }
     }
 }
