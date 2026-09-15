@@ -1,15 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useSelect } from 'App/SelectContext';
-import ClientSideCollectionAppState from 'App/State/ClientSideCollectionAppState';
-import MoviesAppState, { MovieIndexAppState } from 'App/State/MoviesAppState';
+import AppState from 'App/State/AppState';
 import { MOVIE_SEARCH } from 'Commands/commandNames';
 import ConfirmModal from 'Components/Modal/ConfirmModal';
 import PageToolbarButton from 'Components/Page/Toolbar/PageToolbarButton';
 import { icons, kinds } from 'Helpers/Props';
 import { executeCommand } from 'Store/Actions/commandActions';
 import createCommandExecutingSelector from 'Store/Selectors/createCommandExecutingSelector';
-import createMovieClientSideCollectionItemsSelector from 'Store/Selectors/createMovieClientSideCollectionItemsSelector';
 import translate from 'Utilities/String/translate';
 import getSelectedIds from 'Utilities/Table/getSelectedIds';
 
@@ -20,12 +18,9 @@ interface SceneIndexSearchButtonProps {
 
 function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
   const isSearching = useSelector(createCommandExecutingSelector(MOVIE_SEARCH));
-  const {
-    items,
-  }: MoviesAppState & MovieIndexAppState & ClientSideCollectionAppState =
-    useSelector(
-      createMovieClientSideCollectionItemsSelector('sceneIndex', 'scene')
-    );
+  const { items, totalRecords }: AppState['sceneIndex'] = useSelector(
+    (state: AppState) => state.sceneIndex
+  );
 
   const dispatch = useDispatch();
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -38,6 +33,9 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
     return getSelectedIds(selectedState);
   }, [selectedState]);
 
+  // Pilot limitation (issue #37): outside select mode only the current page
+  // of results can be interactive-searched, since the full catalog is no
+  // longer loaded client-side.
   const scenesToSearch =
     isSelectMode && selectedSceneIds.length > 0
       ? selectedSceneIds
@@ -77,7 +75,7 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
       <PageToolbarButton
         label={isSelectMode ? searchSelectLabel : searchIndexLabel}
         isSpinning={isSearching}
-        isDisabled={!items.length}
+        isDisabled={!items.length && !totalRecords}
         iconName={icons.SEARCH}
         onPress={scenesToSearch.length > 5 ? onConfirmPress : onPress}
       />

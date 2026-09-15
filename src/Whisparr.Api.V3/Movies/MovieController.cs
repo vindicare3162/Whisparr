@@ -402,16 +402,20 @@ namespace Whisparr.Api.V3.Movies
             ["id"] = "Movies.Id",
             ["title"] = "MovieMetadata.Title",
             ["sortTitle"] = "MovieMetadata.SortTitle",
+            ["studio"] = "MovieMetadata.StudioTitle",
             ["studioTitle"] = "MovieMetadata.StudioTitle",
+            ["qualityProfileId"] = "Movies.QualityProfileId",
             ["year"] = "MovieMetadata.Year",
             ["releaseDate"] = "MovieMetadata.ReleaseDate",
             ["added"] = "Movies.Added",
-            ["path"] = "Movies.Path"
+            ["path"] = "Movies.Path",
+            ["runtime"] = "MovieMetadata.Runtime",
+            ["certification"] = "MovieMetadata.Certification"
         };
 
         [HttpGet("paged")]
         [Produces("application/json")]
-        public PagingResource<MovieResource> GetMoviesPaged([FromQuery] PagingRequestResource paging, [FromQuery] string itemType)
+        public PagingResource<MovieResource> GetMoviesPaged([FromQuery] PagingRequestResource paging, [FromQuery] string itemType, [FromQuery] bool? monitored, [FromQuery] bool? hasFile)
         {
             var pagingResource = new PagingResource<MovieResource>(paging);
 
@@ -427,10 +431,13 @@ namespace Whisparr.Api.V3.Movies
                     "MovieMetadata.Title",
                     "MovieMetadata.SortTitle",
                     "MovieMetadata.StudioTitle",
+                    "Movies.QualityProfileId",
                     "MovieMetadata.Year",
                     "MovieMetadata.ReleaseDate",
                     "Movies.Added",
-                    "Movies.Path"
+                    "Movies.Path",
+                    "MovieMetadata.Runtime",
+                    "MovieMetadata.Certification"
                 },
                 "MovieMetadata.SortTitle",
                 SortDirection.Ascending);
@@ -438,6 +445,25 @@ namespace Whisparr.Api.V3.Movies
             if (itemType.IsNotNullOrWhiteSpace() && Enum.TryParse<ItemType>(itemType, true, out var parsedItemType))
             {
                 pageSpec.FilterExpressions.Add(m => m.MovieMetadata.Value.ItemType == parsedItemType);
+            }
+
+            if (monitored.HasValue)
+            {
+                pageSpec.FilterExpressions.Add(m => m.Monitored == monitored.Value);
+            }
+
+            if (hasFile.HasValue)
+            {
+                // NOTE: no ternaries here - the datastore ExpressionVisitor
+                // cannot visit Conditional expressions.
+                if (hasFile.Value)
+                {
+                    pageSpec.FilterExpressions.Add(m => m.MovieFileId > 0);
+                }
+                else
+                {
+                    pageSpec.FilterExpressions.Add(m => m.MovieFileId == 0);
+                }
             }
 
             var paged = _moviesService.Paged(pageSpec);

@@ -1,13 +1,18 @@
 import _ from 'lodash';
 import { createAction } from 'redux-actions';
-import { filterBuilderTypes, filterBuilderValueTypes, sortDirections } from 'Helpers/Props';
+import { batchActions } from 'redux-batched-actions';
+import { filterBuilderTypes, filterBuilderValueTypes, filterTypes, sortDirections } from 'Helpers/Props';
+import { createThunk, handleThunks } from 'Store/thunks';
 import sortByProp from 'Utilities/Array/sortByProp';
+import createAjaxRequest from 'Utilities/createAjaxRequest';
+import findSelectedFilters from 'Utilities/Filter/findSelectedFilters';
+import serverSideCollectionHandlers from 'Utilities/serverSideCollectionHandlers';
+import getSectionState from 'Utilities/State/getSectionState';
 import translate from 'Utilities/String/translate';
+import { set, update, updateServerSideCollection } from './baseActions';
 import createHandleActions from './Creators/createHandleActions';
-import createSetClientSideCollectionFilterReducer from './Creators/Reducers/createSetClientSideCollectionFilterReducer';
-import createSetClientSideCollectionSortReducer from './Creators/Reducers/createSetClientSideCollectionSortReducer';
+import createServerSideCollectionHandlers from './Creators/createServerSideCollectionHandlers';
 import createSetTableOptionReducer from './Creators/Reducers/createSetTableOptionReducer';
-import { filterPredicates, filters, sortPredicates } from './movieActions';
 
 //
 // Variables
@@ -18,6 +23,13 @@ export const section = 'sceneIndex';
 // State
 
 export const defaultState = {
+  isFetching: false,
+  isPopulated: false,
+  error: null,
+  pageSize: 100,
+  page: 1,
+  totalPages: 0,
+  totalRecords: 0,
   isSaving: false,
   saveError: null,
   isDeleting: false,
@@ -68,7 +80,7 @@ export const defaultState = {
     {
       name: 'status',
       columnLabel: () => translate('ReleaseStatus'),
-      isSortable: true,
+      isSortable: false,
       isVisible: true,
       isModifiable: false
     },
@@ -124,7 +136,7 @@ export const defaultState = {
     {
       name: 'sizeOnDisk',
       label: () => translate('SizeOnDisk'),
-      isSortable: true,
+      isSortable: false,
       isVisible: false
     },
     {
@@ -136,7 +148,7 @@ export const defaultState = {
     {
       name: 'movieStatus',
       label: () => translate('Status'),
-      isSortable: true,
+      isSortable: false,
       isVisible: true
     },
     {
@@ -153,21 +165,70 @@ export const defaultState = {
     }
   ],
 
-  sortPredicates: {
-    ...sortPredicates,
-
-    studio: function(item) {
-      const studio = item.studioTitle;
-
-      return studio ? studio.toLowerCase() : '';
-    }
-  },
-
   selectedFilterKey: 'all',
 
-  filters,
-  filterPredicates,
+  // Preset filters are translated by the fetch handler into server-side query
+  // params (monitored/hasFile/itemType) for GET /movie/paged.
+  filters: [
+    {
+      key: 'all',
+      label: () => translate('All'),
+      filters: []
+    },
+    {
+      key: 'monitored',
+      label: () => translate('MonitoredOnly'),
+      filters: [
+        {
+          key: 'monitored',
+          value: true,
+          type: filterTypes.EQUAL
+        }
+      ]
+    },
+    {
+      key: 'unmonitored',
+      label: () => translate('Unmonitored'),
+      filters: [
+        {
+          key: 'monitored',
+          value: false,
+          type: filterTypes.EQUAL
+        }
+      ]
+    },
+    {
+      key: 'missing',
+      label: () => translate('Missing'),
+      filters: [
+        {
+          key: 'monitored',
+          value: true,
+          type: filterTypes.EQUAL
+        },
+        {
+          key: 'hasFile',
+          value: false,
+          type: filterTypes.EQUAL
+        }
+      ]
+    },
+    {
+      key: 'downloaded',
+      label: () => translate('Downloaded'),
+      filters: [
+        {
+          key: 'hasFile',
+          value: true,
+          type: filterTypes.EQUAL
+        }
+      ]
+    }
+  ],
 
+  // EQUAL-only server-supported filter builder props. Predicates such as
+  // ranges or "contains" are not expressible in the flattened query params
+  // and are intentionally not offered in the pilot (issue #37).
   filterBuilderProps: [
     {
       name: 'monitored',
@@ -176,21 +237,21 @@ export const defaultState = {
       valueType: filterBuilderValueTypes.BOOL
     },
     {
-      name: 'isAvailable',
-      label: () => translate('ConsideredAvailable'),
-      type: filterBuilderTypes.EXACT,
-      valueType: filterBuilderValueTypes.BOOL
+      name: 'year',
+      label: () => translate('Year'),
+      type: filterBuilderTypes.EXACT
     },
     {
-      name: 'title',
-      label: () => translate('Title'),
-      type: filterBuilderTypes.STRING
+      name: 'added',
+      label: () => translate('Added'),
+      type: filterBuilderTypes.EXACT,
+      valueType: filterBuilderValueTypes.DATE
     },
     {
-      name: 'status',
-      label: () => translate('ReleaseStatus'),
+      name: 'releaseDate',
+      label: () => translate('ReleaseDate'),
       type: filterBuilderTypes.EXACT,
-      valueType: filterBuilderValueTypes.RELEASE_STATUS
+      valueType: filterBuilderValueTypes.DATE
     },
     {
       name: 'studioTitle',
@@ -218,68 +279,6 @@ export const defaultState = {
       label: () => translate('QualityProfile'),
       type: filterBuilderTypes.EXACT,
       valueType: filterBuilderValueTypes.QUALITY_PROFILE
-    },
-    {
-      name: 'added',
-      label: () => translate('Added'),
-      type: filterBuilderTypes.DATE,
-      valueType: filterBuilderValueTypes.DATE
-    },
-    {
-      name: 'year',
-      label: () => translate('Year'),
-      type: filterBuilderTypes.NUMBER
-    },
-    {
-      name: 'releaseDate',
-      label: () => translate('ReleaseDate'),
-      type: filterBuilderTypes.DATE,
-      valueType: filterBuilderValueTypes.DATE
-    },
-    {
-      name: 'runtime',
-      label: () => translate('Runtime'),
-      type: filterBuilderTypes.NUMBER
-    },
-    {
-      name: 'path',
-      label: () => translate('Path'),
-      type: filterBuilderTypes.STRING
-    },
-    {
-      name: 'sizeOnDisk',
-      label: () => translate('SizeOnDisk'),
-      type: filterBuilderTypes.NUMBER,
-      valueType: filterBuilderValueTypes.BYTES
-    },
-    {
-      name: 'genres',
-      label: () => translate('Genres'),
-      type: filterBuilderTypes.ARRAY,
-      optionsSelector: function(items) {
-        const genreList = (items || []).reduce((acc, scene) => {
-          if (scene && Array.isArray(scene.genres)) {
-            scene.genres.forEach((genre) => {
-              acc.push({
-                id: genre,
-                name: genre
-              });
-            });
-          }
-
-          return acc;
-        }, []);
-
-        const genres = _.uniqBy(genreList, 'id');
-
-        return genres.sort(sortByProp('name'));
-      }
-    },
-    {
-      name: 'tags',
-      label: () => translate('Tags'),
-      type: filterBuilderTypes.ARRAY,
-      valueType: filterBuilderValueTypes.TAG
     }
   ]
 };
@@ -288,9 +287,9 @@ export const persistState = [
   'sceneIndex.sortKey',
   'sceneIndex.sortDirection',
   'sceneIndex.selectedFilterKey',
-  'sceneIndex.customFilters',
   'sceneIndex.view',
   'sceneIndex.columns',
+  'sceneIndex.pageSize',
   'sceneIndex.posterOptions',
   'sceneIndex.overviewOptions',
   'sceneIndex.tableOptions'
@@ -299,6 +298,12 @@ export const persistState = [
 //
 // Actions Types
 
+export const FETCH_SCENE_INDEX = 'sceneIndex/fetchSceneIndex';
+export const GOTO_FIRST_SCENE_PAGE = 'sceneIndex/gotoFirstScenePage';
+export const GOTO_PREVIOUS_SCENE_PAGE = 'sceneIndex/gotoPreviousScenePage';
+export const GOTO_NEXT_SCENE_PAGE = 'sceneIndex/gotoNextScenePage';
+export const GOTO_LAST_SCENE_PAGE = 'sceneIndex/gotoLastScenePage';
+export const GOTO_SCENE_PAGE = 'sceneIndex/gotoScenePage';
 export const SET_MOVIE_SORT = 'sceneIndex/setSceneSort';
 export const SET_MOVIE_FILTER = 'sceneIndex/setSceneFilter';
 export const SET_MOVIE_VIEW = 'sceneIndex/setSceneView';
@@ -310,8 +315,14 @@ export const SET_MOVIE_INDEX_MODE = 'sceneIndex/setSceneIndexMode';
 //
 // Action Creators
 
-export const setSceneSort = createAction(SET_MOVIE_SORT);
-export const setSceneFilter = createAction(SET_MOVIE_FILTER);
+export const fetchSceneIndex = createThunk(FETCH_SCENE_INDEX);
+export const gotoFirstScenePage = createThunk(GOTO_FIRST_SCENE_PAGE);
+export const gotoPreviousScenePage = createThunk(GOTO_PREVIOUS_SCENE_PAGE);
+export const gotoNextScenePage = createThunk(GOTO_NEXT_SCENE_PAGE);
+export const gotoLastScenePage = createThunk(GOTO_LAST_SCENE_PAGE);
+export const gotoScenePage = createThunk(GOTO_SCENE_PAGE);
+export const setSceneSort = createThunk(SET_MOVIE_SORT);
+export const setSceneFilter = createThunk(SET_MOVIE_FILTER);
 export const setSceneView = createAction(SET_MOVIE_VIEW);
 export const setSceneTableOption = createAction(SET_MOVIE_TABLE_OPTION);
 export const setScenePosterOption = createAction(SET_MOVIE_POSTER_OPTION);
@@ -319,12 +330,100 @@ export const setSceneOverviewOption = createAction(SET_MOVIE_OVERVIEW_OPTION);
 export const setSceneIndexMode = createAction(SET_MOVIE_INDEX_MODE);
 
 //
+// Action Handlers
+
+function createFetchSceneIndexHandler(sectionName, url) {
+  // Mirrors createFetchServerSideCollectionHandler, but additionally merges
+  // the fetched records into the movie catalog so scene rows/panels (which
+  // read movies via createMovieSelectorForHook) resolve (issue #37 pilot).
+  return function(getState, payload, dispatch) {
+    dispatch(set({ section: sectionName, isFetching: true }));
+
+    const sectionState = getSectionState(getState(), sectionName, true);
+    const page = payload.page || sectionState.page || 1;
+
+    const data = Object.assign(
+      { page },
+      _.pick(sectionState, ['pageSize', 'sortDirection', 'sortKey'])
+    );
+
+    // The scene index only ever shows scenes; the movie/scene split is
+    // filtered server-side.
+    data.itemType = 'scene';
+
+    const { selectedFilterKey, filters } = sectionState;
+
+    const selectedFilters = findSelectedFilters(selectedFilterKey, filters, []);
+
+    selectedFilters.forEach((filter) => {
+      data[filter.key] = filter.value;
+    });
+
+    const { request, abortRequest } = createAjaxRequest({
+      url,
+      data,
+      traditional: true
+    });
+
+    request.done((response) => {
+      dispatch(
+        batchActions([
+          updateServerSideCollection({ section: sectionName, data: response }),
+
+          // Merge the page records into the movie catalog so scene rows
+          // resolve from state.movies.items.
+          update({ section: 'movies', data: response.records }),
+
+          set({
+            section: sectionName,
+            isFetching: false,
+            isPopulated: true,
+            error: null
+          })
+        ])
+      );
+    });
+
+    request.fail((xhr) => {
+      dispatch(
+        set({
+          section: sectionName,
+          isFetching: false,
+          isPopulated: false,
+          error: xhr
+        })
+      );
+    });
+
+    return abortRequest;
+  };
+}
+
+export const actionHandlers = handleThunks({
+  ...createServerSideCollectionHandlers(
+    section,
+    '/movie/paged',
+    fetchSceneIndex,
+    {
+      [serverSideCollectionHandlers.FETCH]: FETCH_SCENE_INDEX,
+      [serverSideCollectionHandlers.FIRST_PAGE]: GOTO_FIRST_SCENE_PAGE,
+      [serverSideCollectionHandlers.PREVIOUS_PAGE]: GOTO_PREVIOUS_SCENE_PAGE,
+      [serverSideCollectionHandlers.NEXT_PAGE]: GOTO_NEXT_SCENE_PAGE,
+      [serverSideCollectionHandlers.LAST_PAGE]: GOTO_LAST_SCENE_PAGE,
+      [serverSideCollectionHandlers.EXACT_PAGE]: GOTO_SCENE_PAGE,
+      [serverSideCollectionHandlers.SORT]: SET_MOVIE_SORT,
+      [serverSideCollectionHandlers.FILTER]: SET_MOVIE_FILTER
+    }
+  ),
+
+  // Custom fetch: also merges page records into the movie catalog (see above).
+  [FETCH_SCENE_INDEX]: createFetchSceneIndexHandler(section, '/movie/paged')
+});
+
+//
 // Reducers
 
 export const reducers = createHandleActions({
-
-  [SET_MOVIE_SORT]: createSetClientSideCollectionSortReducer(section),
-  [SET_MOVIE_FILTER]: createSetClientSideCollectionFilterReducer(section),
 
   [SET_MOVIE_VIEW]: function(state, { payload }) {
     return Object.assign({}, state, { view: payload.view });

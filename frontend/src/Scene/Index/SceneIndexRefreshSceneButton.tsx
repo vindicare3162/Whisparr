@@ -1,14 +1,12 @@
 import React, { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useSelect } from 'App/SelectContext';
-import ClientSideCollectionAppState from 'App/State/ClientSideCollectionAppState';
-import MoviesAppState, { MovieIndexAppState } from 'App/State/MoviesAppState';
+import AppState from 'App/State/AppState';
 import { REFRESH_MOVIE } from 'Commands/commandNames';
 import PageToolbarButton from 'Components/Page/Toolbar/PageToolbarButton';
 import { icons } from 'Helpers/Props';
 import { executeCommand } from 'Store/Actions/commandActions';
 import createCommandExecutingSelector from 'Store/Selectors/createCommandExecutingSelector';
-import createMovieClientSideCollectionItemsSelector from 'Store/Selectors/createMovieClientSideCollectionItemsSelector';
 import translate from 'Utilities/String/translate';
 import getSelectedIds from 'Utilities/Table/getSelectedIds';
 
@@ -23,13 +21,9 @@ function SceneIndexRefreshSceneButton(
   const isRefreshing = useSelector(
     createCommandExecutingSelector(REFRESH_MOVIE)
   );
-  const {
-    items,
-    totalItems,
-  }: MoviesAppState & MovieIndexAppState & ClientSideCollectionAppState =
-    useSelector(
-      createMovieClientSideCollectionItemsSelector('sceneIndex', 'scene')
-    );
+  const { totalRecords }: AppState['sceneIndex'] = useSelector(
+    (state: AppState) => state.sceneIndex
+  );
 
   const dispatch = useDispatch();
   const { isSelectMode, selectedFilterKey } = props;
@@ -40,10 +34,11 @@ function SceneIndexRefreshSceneButton(
     return getSelectedIds(selectedState);
   }, [selectedState]);
 
-  const scenesToRefresh =
-    isSelectMode && selectedSceneIds.length > 0
-      ? selectedSceneIds
-      : items.map((m) => m.id);
+  // In select mode refresh the selected scenes; otherwise refresh the whole
+  // library server-side (REFRESH_MOVIE without ids refreshes everything).
+  const scenesToRefresh = useMemo(() => {
+    return isSelectMode && selectedSceneIds.length > 0 ? selectedSceneIds : [];
+  }, [isSelectMode, selectedSceneIds]);
 
   const refreshIndexLabel =
     selectedFilterKey === 'all'
@@ -68,7 +63,7 @@ function SceneIndexRefreshSceneButton(
     <PageToolbarButton
       label={isSelectMode ? refreshSelectLabel : refreshIndexLabel}
       isSpinning={isRefreshing}
-      isDisabled={!totalItems}
+      isDisabled={!totalRecords}
       iconName={icons.REFRESH}
       onPress={onPress}
     />

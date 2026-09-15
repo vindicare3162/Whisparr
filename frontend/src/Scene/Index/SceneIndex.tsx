@@ -7,21 +7,20 @@ import React, {
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { SelectProvider } from 'App/SelectContext';
-import ClientSideCollectionAppState from 'App/State/ClientSideCollectionAppState';
-import MoviesAppState, { MovieIndexAppState } from 'App/State/MoviesAppState';
+import AppState from 'App/State/AppState';
 import { RSS_SYNC } from 'Commands/commandNames';
 import Alert from 'Components/Alert';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
-import PageJumpBar from 'Components/Page/PageJumpBar';
 import PageToolbar from 'Components/Page/Toolbar/PageToolbar';
 import PageToolbarButton from 'Components/Page/Toolbar/PageToolbarButton';
 import PageToolbarSection from 'Components/Page/Toolbar/PageToolbarSection';
 import PageToolbarSeparator from 'Components/Page/Toolbar/PageToolbarSeparator';
 import TableOptionsModalWrapper from 'Components/Table/TableOptions/TableOptionsModalWrapper';
+import TablePager from 'Components/Table/TablePager';
 import withScrollPosition from 'Components/withScrollPosition';
-import { align, icons, kinds, sortDirections } from 'Helpers/Props';
+import { align, icons, kinds } from 'Helpers/Props';
 import InteractiveImportModal from 'InteractiveImport/InteractiveImportModal';
 import MovieIndexSelectAllButton from 'Movie/Index/Select/MovieIndexSelectAllButton';
 import MovieIndexSelectAllMenuItem from 'Movie/Index/Select/MovieIndexSelectAllMenuItem';
@@ -30,9 +29,14 @@ import MovieIndexSelectModeMenuItem from 'Movie/Index/Select/MovieIndexSelectMod
 import ParseToolbarButton from 'Parse/ParseToolbarButton';
 import NoScene from 'Scene/NoScene';
 import { executeCommand } from 'Store/Actions/commandActions';
-import { fetchMovies } from 'Store/Actions/movieActions';
 import { fetchQueueDetails } from 'Store/Actions/queueActions';
 import {
+  fetchSceneIndex,
+  gotoFirstScenePage,
+  gotoLastScenePage,
+  gotoNextScenePage,
+  gotoPreviousScenePage,
+  gotoScenePage,
   setSceneFilter,
   setSceneSort,
   setSceneTableOption,
@@ -41,7 +45,6 @@ import {
 import scrollPositions from 'Store/scrollPositions';
 import createCommandExecutingSelector from 'Store/Selectors/createCommandExecutingSelector';
 import createDimensionsSelector from 'Store/Selectors/createDimensionsSelector';
-import createMovieClientSideCollectionItemsSelector from 'Store/Selectors/createMovieClientSideCollectionItemsSelector';
 import translate from 'Utilities/String/translate';
 import SceneIndexFilterMenu from './Menus/SceneIndexFilterMenu';
 import SceneIndexSortMenu from './Menus/SceneIndexSortMenu';
@@ -50,7 +53,6 @@ import SceneIndexOverviewOptionsModal from './Overview/Options/SceneIndexOvervie
 import SceneIndexOverviews from './Overview/SceneIndexOverviews';
 import SceneIndexPosterOptionsModal from './Posters/Options/SceneIndexPosterOptionsModal';
 import SceneIndexPosters from './Posters/SceneIndexPosters';
-import SceneIndexFooter from './SceneIndexFooter';
 import SceneIndexRefreshSceneButton from './SceneIndexRefreshSceneButton';
 import SceneIndexSearchButton from './SceneIndexSearchButton';
 import SceneIndexSelectFooter from './Select/SceneIndexSelectFooter';
@@ -79,19 +81,19 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
     isFetching,
     isPopulated,
     error,
-    totalItems,
+    totalRecords,
     items,
     columns,
     selectedFilterKey,
     filters,
-    customFilters,
     sortKey,
     sortDirection,
+    page,
+    totalPages,
     view,
-  }: MoviesAppState & MovieIndexAppState & ClientSideCollectionAppState =
-    useSelector(
-      createMovieClientSideCollectionItemsSelector('sceneIndex', 'scene')
-    );
+  }: AppState['sceneIndex'] = useSelector(
+    (state: AppState) => state.sceneIndex
+  );
 
   const isRssSyncExecuting = useSelector(
     createCommandExecutingSelector(RSS_SYNC)
@@ -102,13 +104,10 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
   const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
   const [isInteractiveImportModalOpen, setIsInteractiveImportModalOpen] =
     useState(false);
-  const [jumpToCharacter, setJumpToCharacter] = useState<string | undefined>(
-    undefined
-  );
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchMovies());
+    dispatch(fetchSceneIndex());
     dispatch(fetchQueueDetails({ all: true }));
   }, [dispatch]);
 
@@ -172,62 +171,37 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
     setIsInteractiveImportModalOpen(false);
   }, [setIsInteractiveImportModalOpen]);
 
-  const onJumpBarItemPress = useCallback(
-    (character: string) => {
-      setJumpToCharacter(character);
+  const onFirstPagePress = useCallback(() => {
+    dispatch(gotoFirstScenePage());
+  }, [dispatch]);
+
+  const onPreviousPagePress = useCallback(() => {
+    dispatch(gotoPreviousScenePage());
+  }, [dispatch]);
+
+  const onNextPagePress = useCallback(() => {
+    dispatch(gotoNextScenePage());
+  }, [dispatch]);
+
+  const onLastPagePress = useCallback(() => {
+    dispatch(gotoLastScenePage());
+  }, [dispatch]);
+
+  const onPageSelect = useCallback(
+    (page: number) => {
+      dispatch(gotoScenePage({ page }));
     },
-    [setJumpToCharacter]
+    [dispatch]
   );
 
-  const onScroll = useCallback(
-    ({ scrollTop }: { scrollTop: number }) => {
-      setJumpToCharacter(undefined);
-      scrollPositions.sceneIndex = scrollTop;
-    },
-    [setJumpToCharacter]
-  );
+  const onScroll = useCallback(({ scrollTop }: { scrollTop: number }) => {
+    scrollPositions.sceneIndex = scrollTop;
+  }, []);
 
-  const jumpBarItems = useMemo(() => {
-    // Reset if not sorting by sortTitle
-    if (sortKey !== 'sortTitle') {
-      return {
-        characters: {},
-        order: [],
-      };
-    }
-
-    const characters = items.reduce((acc: Record<string, number>, item) => {
-      let char = item.sortTitle.charAt(0);
-
-      if (!isNaN(Number(char))) {
-        char = '#';
-      }
-
-      if (char in acc) {
-        acc[char] = acc[char] + 1;
-      } else {
-        acc[char] = 1;
-      }
-
-      return acc;
-    }, {});
-
-    const order = Object.keys(characters).sort();
-
-    // Reverse if sorting descending
-    if (sortDirection === sortDirections.DESCENDING) {
-      order.reverse();
-    }
-
-    return {
-      characters,
-      order,
-    };
-  }, [items, sortKey, sortDirection]);
   const ViewComponent = useMemo(() => getViewComponent(view), [view]);
 
-  const isLoaded = !!(!error && isPopulated && items.length);
-  const hasNoScene = !totalItems;
+  const isLoaded = !!(!error && isPopulated);
+  const hasNoScene = !totalRecords;
 
   return (
     <SelectProvider items={items}>
@@ -326,7 +300,7 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
             <SceneIndexFilterMenu
               selectedFilterKey={selectedFilterKey}
               filters={filters}
-              customFilters={customFilters}
+              customFilters={[]}
               isDisabled={hasNoScene}
               onFilterSelect={onFilterSelect}
             />
@@ -357,26 +331,28 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
                   items={items}
                   sortKey={sortKey}
                   sortDirection={sortDirection}
-                  jumpToCharacter={jumpToCharacter}
                   isSelectMode={isSelectMode}
                   isSmallScreen={isSmallScreen}
                 />
 
-                <SceneIndexFooter />
+                <TablePager
+                  page={page}
+                  totalPages={totalPages}
+                  totalRecords={totalRecords}
+                  isFetching={isFetching}
+                  onFirstPagePress={onFirstPagePress}
+                  onPreviousPagePress={onPreviousPagePress}
+                  onNextPagePress={onNextPagePress}
+                  onLastPagePress={onLastPagePress}
+                  onPageSelect={onPageSelect}
+                />
               </div>
             ) : null}
 
             {!error && isPopulated && !items.length ? (
-              <NoScene totalItems={totalItems} />
+              <NoScene totalItems={totalRecords} />
             ) : null}
           </PageContentBody>
-
-          {isLoaded && !!jumpBarItems.order.length ? (
-            <PageJumpBar
-              items={jumpBarItems}
-              onItemPress={onJumpBarItemPress}
-            />
-          ) : null}
         </div>
 
         {isSelectMode ? <SceneIndexSelectFooter /> : null}

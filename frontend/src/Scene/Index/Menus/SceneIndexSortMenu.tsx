@@ -20,15 +20,6 @@ function SceneIndexSortMenu(props: SceneIndexSortMenuProps) {
     <SortMenu isDisabled={isDisabled} alignMenu={align.RIGHT}>
       <MenuContent>
         <SortMenuItem
-          name="status"
-          sortKey={sortKey}
-          sortDirection={sortDirection}
-          onPress={onSortSelect}
-        >
-          {translate('MonitoredStatus')}
-        </SortMenuItem>
-
-        <SortMenuItem
           name="sortTitle"
           sortKey={sortKey}
           sortDirection={sortDirection}
@@ -89,24 +80,6 @@ function SceneIndexSortMenu(props: SceneIndexSortMenuProps) {
           onPress={onSortSelect}
         >
           {translate('Path')}
-        </SortMenuItem>
-
-        <SortMenuItem
-          name="sizeOnDisk"
-          sortKey={sortKey}
-          sortDirection={sortDirection}
-          onPress={onSortSelect}
-        >
-          {translate('SizeOnDisk')}
-        </SortMenuItem>
-
-        <SortMenuItem
-          name="originalLanguage"
-          sortKey={sortKey}
-          sortDirection={sortDirection}
-          onPress={onSortSelect}
-        >
-          {translate('OriginalLanguage')}
         </SortMenuItem>
       </MenuContent>
     </SortMenu>
