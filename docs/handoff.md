@@ -1,5 +1,53 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (4): #37 measurements + `GET /movie/paged` endpoint, redeployed
+
+### Payload measurements (live, 59,522-item library)
+
+- Raw catalog payload (`POST /movie/bulk`, 10k items sampled): 35.2MB full / 26.6MB without
+  credits -> projected ~210MB / ~158MB for the full catalog.
+- Credits are only ~25% of the payload; overview (0.5MB/1k), genres, images, folderName/path
+  make up most of the rest and are all used by the index views - further blind trimming would
+  break views/filters.
+- **Wire size is already small**: response compression (gzip) is enabled in Whisparr's
+  Startup, so the actual transfer is ~6.2MB per 10k items -> **~37MB gzipped for the whole
+  catalog** (down from the previously measured 198MB raw). The remaining cost is browser
+  JSON parse time and memory, not the network.
+
+### `GET /movie/paged` (stage 2 backend)
+
+`GET /movie/paged?page=&pageSize=&sortKey=&sortDirection=&itemType=` returns
+`PagingResource<MovieResource>` (page/pageSize/totalRecords/records) with the same enrichment
+as `/movie/bulk` (batched statistics, local covers, root folder paths - no N+1).
+
+- Sort keys accepted: id, title, sortTitle, studioTitle, year, releaseDate, added, path -
+  translated to table-qualified columns (`MovieMetadata.SortTitle` etc.). Unknown keys fall
+  back to sortTitle.
+- `itemType=movie|scene` filters via a FilterExpression.
+- **Learned the hard way:** the query SELECT template (`TableMapping.Mapper.SelectTemplate`)
+  already joins MovieMetadata for hydration - do NOT add an explicit
+  `.Join<Movie, MovieMetadata>` in `PagedBuilder`, it causes Postgres
+  `42712: table name "MovieMetadata" specified more than once`.
+
+### Deployed & verified
+
+Rebuilt `whisparr-local:latest` (--no-cache-filter backend to defeat the BuildKit stale-cache
+issue from earlier), recreated the container. Verified live:
+- `?page=1&sortKey=sortTitle&itemType=scene` -> total=59522, sorted ascending, statistics present
+- page=2 returns different records; `sortDirection=descending` on year -> 2026/2026/2023
+- `itemType=movie` -> total=0 (correct: this dataset is 100% scenes)
+- `/movie/count`, `/movie/detail/...`, `/movie/bulk` (both variants) all still working
+
+### Remaining for #37 (open)
+
+Wire the Movies/Scenes index frontend to `/movie/paged`: replace the client-side collection
+selector with server-driven paging, move the filter builder to server-side filter expressions,
+and handle select-all/jump-bar semantics. This is the last major piece.
+
+---
+
+## 2026-09-15 (3): Deployment + issues #34, #37 (stage 1), #36, #39
+
 ## 2026-09-15 (3): Deployment + issues #34, #37 (stage 1), #36, #39
 
 ### Deployment (local Docker, per DEPLOYMENT.local.md)
