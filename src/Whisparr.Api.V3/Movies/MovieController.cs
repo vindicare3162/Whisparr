@@ -11,6 +11,7 @@ using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DecisionEngine.Specifications;
 using NzbDrone.Core.MediaCover;
@@ -390,6 +391,79 @@ namespace Whisparr.Api.V3.Movies
             moviesResources.ForEach(m => m.RootFolderPath = _rootFolderService.GetBestRootFolderPath(m.Path, rootFolders));
 
             return moviesResources;
+        }
+
+        // Server-side paged listing (issue #37): one page of movie/scene resources
+        // with the same enrichment as /movie/bulk, so the UI can eventually stop
+        // loading the full catalog. Sort keys are translated from the index UI
+        // names to table-qualified columns; itemType filters to movie|scene.
+        private static readonly Dictionary<string, string> MoviePagedSortKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["id"] = "Movies.Id",
+            ["title"] = "MovieMetadata.Title",
+            ["sortTitle"] = "MovieMetadata.SortTitle",
+            ["studioTitle"] = "MovieMetadata.StudioTitle",
+            ["year"] = "MovieMetadata.Year",
+            ["releaseDate"] = "MovieMetadata.ReleaseDate",
+            ["added"] = "Movies.Added",
+            ["path"] = "Movies.Path"
+        };
+
+        [HttpGet("paged")]
+        [Produces("application/json")]
+        public PagingResource<MovieResource> GetMoviesPaged([FromQuery] PagingRequestResource paging, [FromQuery] string itemType)
+        {
+            var pagingResource = new PagingResource<MovieResource>(paging);
+
+            var sortKey = paging.SortKey != null && MoviePagedSortKeys.TryGetValue(paging.SortKey, out var qualified)
+                ? qualified
+                : MoviePagedSortKeys["sortTitle"];
+            paging.SortKey = sortKey;
+
+            var pageSpec = pagingResource.MapToPagingSpec<MovieResource, Movie>(
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "Movies.Id",
+                    "MovieMetadata.Title",
+                    "MovieMetadata.SortTitle",
+                    "MovieMetadata.StudioTitle",
+                    "MovieMetadata.Year",
+                    "MovieMetadata.ReleaseDate",
+                    "Movies.Added",
+                    "Movies.Path"
+                },
+                "MovieMetadata.SortTitle",
+                SortDirection.Ascending);
+
+            if (itemType.IsNotNullOrWhiteSpace() && Enum.TryParse<ItemType>(itemType, true, out var parsedItemType))
+            {
+                pageSpec.FilterExpressions.Add(m => m.MovieMetadata.Value.ItemType == parsedItemType);
+            }
+
+            var paged = _moviesService.Paged(pageSpec);
+            var movies = paged.Records;
+
+            var availDelay = _configService.AvailabilityDelay;
+            var moviesResources = movies.Select(m => m.ToResource(availDelay, _qualityUpgradableSpecification)).ToList();
+
+            var movieStats = _movieStatisticsService.MovieStatistics(movies.Select(x => x.Id).ToList());
+            var sdict = movieStats.ToDictionary(x => x.MovieId);
+            LinkMovieStatistics(moviesResources, sdict);
+
+            MapCoversToLocal(moviesResources, _coverMapper.GetMovieCoverFileInfos());
+
+            var rootFolders = _rootFolderService.All();
+            moviesResources.ForEach(m => m.RootFolderPath = _rootFolderService.GetBestRootFolderPath(m.Path, rootFolders));
+
+            return new PagingResource<MovieResource>
+            {
+                Page = paged.Page,
+                PageSize = paged.PageSize,
+                SortKey = paged.SortKey,
+                SortDirection = paged.SortDirection,
+                TotalRecords = paged.TotalRecords,
+                Records = moviesResources
+            };
         }
 
         [HttpGet("listByPerformerForeignId")]
