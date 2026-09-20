@@ -13,6 +13,7 @@ import Alert from 'Components/Alert';
 import LoadingIndicator from 'Components/Loading/LoadingIndicator';
 import PageContent from 'Components/Page/PageContent';
 import PageContentBody from 'Components/Page/PageContentBody';
+import PageJumpBar from 'Components/Page/PageJumpBar';
 import PageToolbar from 'Components/Page/Toolbar/PageToolbar';
 import PageToolbarButton from 'Components/Page/Toolbar/PageToolbarButton';
 import PageToolbarSection from 'Components/Page/Toolbar/PageToolbarSection';
@@ -53,6 +54,7 @@ import SceneIndexOverviewOptionsModal from './Overview/Options/SceneIndexOvervie
 import SceneIndexOverviews from './Overview/SceneIndexOverviews';
 import SceneIndexPosterOptionsModal from './Posters/Options/SceneIndexPosterOptionsModal';
 import SceneIndexPosters from './Posters/SceneIndexPosters';
+import SceneIndexFooter from './SceneIndexFooter';
 import SceneIndexRefreshSceneButton from './SceneIndexRefreshSceneButton';
 import SceneIndexSearchButton from './SceneIndexSearchButton';
 import SceneIndexSelectFooter from './Select/SceneIndexSelectFooter';
@@ -82,6 +84,7 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
     isPopulated,
     error,
     totalRecords,
+    jumpBar,
     items,
     columns,
     selectedFilterKey,
@@ -89,6 +92,7 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
     sortKey,
     sortDirection,
     page,
+    pageSize,
     totalPages,
     view,
   }: AppState['sceneIndex'] = useSelector(
@@ -197,6 +201,43 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
   const onScroll = useCallback(({ scrollTop }: { scrollTop: number }) => {
     scrollPositions.sceneIndex = scrollTop;
   }, []);
+
+  // Server-computed first-letter positions: pressing a letter jumps to the
+  // page containing that letter's first scene (issue #37).
+  const jumpBarItems = useMemo(() => {
+    if (sortKey !== 'sortTitle' || !jumpBar?.length) {
+      return {
+        characters: {},
+        order: [],
+      };
+    }
+
+    const characters: Record<string, number> = {};
+
+    jumpBar.forEach((j) => {
+      characters[j.letter] = j.count;
+    });
+
+    return {
+      characters,
+      order: jumpBar.map((j) => j.letter),
+    };
+  }, [sortKey, jumpBar]);
+
+  const onJumpBarItemPress = useCallback(
+    (character: string) => {
+      const item = jumpBar?.find((j) => j.letter === character);
+
+      if (item) {
+        dispatch(
+          gotoScenePage({
+            page: Math.floor(item.index / (pageSize || 100)) + 1,
+          })
+        );
+      }
+    },
+    [jumpBar, pageSize, dispatch]
+  );
 
   const ViewComponent = useMemo(() => getViewComponent(view), [view]);
 
@@ -335,6 +376,8 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
                   isSmallScreen={isSmallScreen}
                 />
 
+                <SceneIndexFooter />
+
                 <TablePager
                   page={page}
                   totalPages={totalPages}
@@ -353,6 +396,15 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
               <NoScene totalItems={totalRecords} />
             ) : null}
           </PageContentBody>
+
+          {isLoaded &&
+          sortKey === 'sortTitle' &&
+          !!jumpBarItems.order.length ? (
+            <PageJumpBar
+              items={jumpBarItems}
+              onItemPress={onJumpBarItemPress}
+            />
+          ) : null}
         </div>
 
         {isSelectMode ? <SceneIndexSelectFooter /> : null}

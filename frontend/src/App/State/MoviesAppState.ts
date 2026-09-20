@@ -1,7 +1,6 @@
 import AppSectionState, {
   AppSectionDeleteState,
   AppSectionSaveState,
-  PagedAppSectionState,
 } from 'App/State/AppSectionState';
 import Column from 'Components/Table/Column';
 import SortDirection from 'Helpers/Props/SortDirection';
@@ -50,16 +49,27 @@ export interface MovieIndexAppState {
   columns: Column[];
 }
 
-// The Scenes index is server-side paged (issue #37 pilot), so it holds its own
-// page of records and the paging state alongside the shared index view options.
-export interface SceneIndexAppState
-  extends MovieIndexAppState,
-    AppSectionState<Movie>,
-    PagedAppSectionState {
-  indexMode: string;
-
-  // Always set by the sceneIndex reducer, unlike the optional base field.
+// Server-side collection state for the Scenes index pilot (issue #37).
+export interface SceneIndexAppState extends MovieIndexAppState {
+  isFetching: boolean;
+  isPopulated: boolean;
+  error?: unknown;
+  pageSize: number;
+  page: number;
+  totalPages: number;
   totalRecords: number;
+  items: Movie[];
+
+  // Library-wide aggregates honoring the active filters (issue #37).
+  stats?: {
+    totalRecords: number;
+    hasFileCount: number;
+    monitoredCount: number;
+    sizeOnDisk: number;
+  };
+
+  // First-letter jump bar positions within the filtered+sorted set.
+  jumpBar?: Array<{ letter: string; index: number; count: number }>;
 }
 
 interface MoviesAppState

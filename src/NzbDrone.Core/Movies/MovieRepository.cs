@@ -32,6 +32,8 @@ namespace NzbDrone.Core.Movies
         List<StudioMovieCount> GetStudioMovieCounts(List<string> studioForeignIds);
         List<Movie> MoviesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored);
         PagingSpec<Movie> MoviesWithoutFiles(PagingSpec<Movie> pagingSpec);
+        MovieIndexStats MoviesStats(PagingSpec<Movie> pagingSpec);
+        List<MovieJumpBarItem> MoviesJumpBar(PagingSpec<Movie> pagingSpec, SortDirection sortDirection);
         List<Movie> GetMoviesByFileId(int fileId);
         List<Movie> GetMoviesByFileId(IEnumerable<int> fileId);
         PagingSpec<Movie> MoviesWhereCutoffUnmet(PagingSpec<Movie> pagingSpec, List<QualitiesBelowCutoff> qualitiesBelowCutoff);
@@ -56,6 +58,21 @@ namespace NzbDrone.Core.Movies
         public int TotalCount { get; set; }
         public int HasFileCount { get; set; }
         public long SizeOnDisk { get; set; }
+    }
+
+    public class MovieIndexStats
+    {
+        public long TotalRecords { get; set; }
+        public long HasFileCount { get; set; }
+        public long MonitoredCount { get; set; }
+        public long SizeOnDisk { get; set; }
+    }
+
+    public class MovieJumpBarItem
+    {
+        public string Letter { get; set; }
+        public long Index { get; set; }
+        public long Count { get; set; }
     }
 
     public class StudioMovieCount
@@ -502,6 +519,63 @@ namespace NzbDrone.Core.Movies
             pagingSpec.TotalRecords = GetPagedRecordCount(MoviesWithoutFilesBuilder().SelectCountDistinct<Movie>(x => x.Id), pagingSpec);
 
             return pagingSpec;
+        }
+
+        // Aggregates for the paged index footer/jump bar, honoring the same
+        // filters as the page (issue #37).
+        private SqlBuilder MoviesAggregateBuilder(PagingSpec<Movie> pagingSpec)
+        {
+            var builder = Builder()
+                .Join<Movie, MovieMetadata>((m, p) => m.MovieMetadataId == p.Id)
+                .LeftJoin<Movie, MovieFile>((m, f) => m.MovieFileId == f.Id);
+
+            foreach (var filter in pagingSpec.FilterExpressions)
+            {
+                builder.Where<Movie>(filter);
+            }
+
+            return builder;
+        }
+
+        public MovieIndexStats MoviesStats(PagingSpec<Movie> pagingSpec)
+        {
+            var builder = MoviesAggregateBuilder(pagingSpec);
+
+            builder.Select(
+                "COUNT(*) AS \"TotalRecords\", " +
+                "COALESCE(SUM(CASE WHEN \"Movies\".\"MovieFileId\" > 0 THEN 1 ELSE 0 END), 0) AS \"HasFileCount\", " +
+                "COALESCE(SUM(CASE WHEN \"Movies\".\"Monitored\" THEN 1 ELSE 0 END), 0) AS \"MonitoredCount\", " +
+                "COALESCE(SUM(\"MovieFiles\".\"Size\"), 0) AS \"SizeOnDisk\"");
+
+            var template = builder.AddTemplate(
+                "SELECT /**select**/ FROM \"Movies\" /**join**/ /**leftjoin**/ /**where**/");
+
+            using (var conn = _database.OpenConnection())
+            {
+                return conn.Query<MovieIndexStats>(template.RawSql, template.Parameters).FirstOrDefault();
+            }
+        }
+
+        // First-letter histogram with the row index of each letter's first item
+        // within the filtered+sorted set, so the UI can translate a jump-to-letter
+        // into a page number (issue #37).
+        public List<MovieJumpBarItem> MoviesJumpBar(PagingSpec<Movie> pagingSpec, SortDirection sortDirection)
+        {
+            var direction = sortDirection == SortDirection.Descending ? "DESC" : "ASC";
+            var builder = MoviesAggregateBuilder(pagingSpec);
+
+            var template = builder.AddTemplate(
+                "SELECT \"Letter\", MIN(\"Rn\") AS \"Index\", COUNT(*) AS \"Count\" FROM (" +
+                "SELECT SUBSTR(\"MovieMetadata\".\"SortTitle\", 1, 1) AS \"Letter\", " +
+                "ROW_NUMBER() OVER (ORDER BY \"MovieMetadata\".\"SortTitle\" " + direction + ") AS \"Rn\" " +
+                "FROM \"Movies\" /**join**/ /**leftjoin**/ /**where**/) AS \"Jump\" " +
+                "GROUP BY \"Letter\" " +
+                "ORDER BY \"Letter\" " + direction);
+
+            using (var conn = _database.OpenConnection())
+            {
+                return conn.Query<MovieJumpBarItem>(template.RawSql, template.Parameters).AsList();
+            }
         }
 
         public SqlBuilder MoviesWhereCutoffUnmetBuilder(List<QualitiesBelowCutoff> qualitiesBelowCutoff) => Builder()
