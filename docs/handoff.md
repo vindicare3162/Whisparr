@@ -1,5 +1,33 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (8): Server-side filter search — Search button limitation fixed
+
+The last remaining "known limitation" from the pilot is resolved: **the Search button in
+non-select mode now searches ALL matching scenes server-side** instead of just the current
+page.
+
+- `MoviesSearchCommand` extended with optional `ItemType` / `Monitored` / `HasFile` params.
+  When `MovieIds` is empty and `ItemType` is set, `MovieSearchService.Execute` builds a
+  server-side PagingSpec (PageSize=100000) with the same FilterExpressions as `/movie/paged`
+  and interactive-searches all matching scenes — no full catalog needed client-side.
+- `SceneIndexSearchButton` (non-select mode) dispatches the filter params derived from the
+  active preset (itemType=scene + monitored/hasFile from FILTER_PARAMS mapping). Select mode
+  still searches explicitly selected IDs.
+- Confirmed pattern: mirrors the existing `MissingMoviesSearchCommand` approach (server-paged
+  query + SearchForBulkMovies).
+
+**Verified:** build + lint clean; deployed and the paged endpoint returns correct data
+(59,562 items, 55.33 TiB, 37-letter jump bar).
+
+**Remaining known limitation (deliberate, documented):** the filter builder remains
+EQUAL-only — ranges/contains/arrays require the structured filter payload design and are a
+future enhancement, not a regression from the old client-side index (which also lacked
+server-side expression support for those filter types).
+
+---
+
+## 2026-09-15 (7): Stats + jump bar added to /movie/paged; blank-page fix
+
 ## 2026-09-15 (7): Stats + jump bar added to /movie/paged; blank-page fix
 
 Follow-up on the pilot: the two "known limitations" that had cheap fixes are now addressed.
