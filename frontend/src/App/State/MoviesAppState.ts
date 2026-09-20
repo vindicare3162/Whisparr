@@ -1,6 +1,7 @@
 import AppSectionState, {
   AppSectionDeleteState,
   AppSectionSaveState,
+  PagedAppSectionState,
 } from 'App/State/AppSectionState';
 import Column from 'Components/Table/Column';
 import SortDirection from 'Helpers/Props/SortDirection';
@@ -47,6 +48,18 @@ export interface MovieIndexAppState {
   filterBuilderProps: FilterBuilderProp<Movie>[];
   filters: Filter[];
   columns: Column[];
+}
+
+// The Scenes index is server-side paged (issue #37 pilot), so it holds its own
+// page of records and the paging state alongside the shared index view options.
+export interface SceneIndexAppState
+  extends MovieIndexAppState,
+    AppSectionState<Movie>,
+    PagedAppSectionState {
+  indexMode: string;
+
+  // Always set by the sceneIndex reducer, unlike the optional base field.
+  totalRecords: number;
 }
 
 interface MoviesAppState
