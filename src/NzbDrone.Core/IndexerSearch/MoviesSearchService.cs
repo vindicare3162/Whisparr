@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DecisionEngine;
@@ -41,11 +42,52 @@ namespace NzbDrone.Core.IndexerSearch
         {
             var userInvokedSearch = message.Trigger == CommandTrigger.Manual;
 
-            var movies = _movieService.GetMovies(message.MovieIds)
+            // Server-side filter search (issue #37): no explicit IDs, search all
+            // matching scenes via a paged query so the UI doesn't need the full
+            // catalog client-side.
+            if ((message.MovieIds == null || !message.MovieIds.Any()) && message.ItemType.IsNotNullOrWhiteSpace())
+            {
+                var pagingSpec = new PagingSpec<Movie>
+                {
+                    Page = 1,
+                    PageSize = 100000,
+                    SortDirection = SortDirection.Ascending,
+                    SortKey = "Id"
+                };
+
+                if (Enum.TryParse<ItemType>(message.ItemType, true, out var parsedItemType))
+                {
+                    pagingSpec.FilterExpressions.Add(m => m.MovieMetadata.Value.ItemType == parsedItemType);
+                }
+
+                if (message.Monitored.HasValue)
+                {
+                    pagingSpec.FilterExpressions.Add(m => m.Monitored == message.Monitored.Value);
+                }
+
+                if (message.HasFile.HasValue)
+                {
+                    if (message.HasFile.Value)
+                    {
+                        pagingSpec.FilterExpressions.Add(m => m.MovieFileId > 0);
+                    }
+                    else
+                    {
+                        pagingSpec.FilterExpressions.Add(m => m.MovieFileId == 0);
+                    }
+                }
+
+                var filteredMovies = _movieService.Paged(pagingSpec).Records.ToList();
+
+                SearchForBulkMovies(filteredMovies, userInvokedSearch).GetAwaiter().GetResult();
+                return;
+            }
+
+            var searchMovies = _movieService.GetMovies(message.MovieIds)
                 .Where(m => (m.Monitored && m.IsAvailable()) || userInvokedSearch)
                 .ToList();
 
-            SearchForBulkMovies(movies, userInvokedSearch).GetAwaiter().GetResult();
+            SearchForBulkMovies(searchMovies, userInvokedSearch).GetAwaiter().GetResult();
         }
 
         public void Execute(MissingMoviesSearchCommand message)

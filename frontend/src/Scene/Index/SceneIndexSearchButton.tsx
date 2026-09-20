@@ -16,6 +16,17 @@ interface SceneIndexSearchButtonProps {
   selectedFilterKey: string;
 }
 
+// Map filter preset keys to server-side search params (issue #37).
+const FILTER_PARAMS: Record<
+  string,
+  { monitored?: boolean; hasFile?: boolean }
+> = {
+  monitored: { monitored: true },
+  unmonitored: { monitored: false },
+  missing: { monitored: true, hasFile: false },
+  downloaded: { hasFile: true },
+};
+
 function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
   const isSearching = useSelector(createCommandExecutingSelector(MOVIE_SEARCH));
   const { items, totalRecords }: AppState['sceneIndex'] = useSelector(
@@ -33,14 +44,9 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
     return getSelectedIds(selectedState);
   }, [selectedState]);
 
-  // Pilot limitation (issue #37): outside select mode only the current page
-  // of results can be interactive-searched, since the full catalog is no
-  // longer loaded client-side.
-  const scenesToSearch =
-    isSelectMode && selectedSceneIds.length > 0
-      ? selectedSceneIds
-      : items.map((m) => m.id);
-
+  // Server-side filter search (issue #37): the search dispatches filter
+  // params instead of page-scoped IDs so the backend searches all matching
+  // scenes without requiring the full catalog client-side.
   const searchIndexLabel =
     selectedFilterKey === 'all'
       ? translate('SearchAll')
@@ -54,13 +60,28 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
   const onPress = useCallback(() => {
     setIsConfirmModalOpen(false);
 
-    dispatch(
-      executeCommand({
-        name: MOVIE_SEARCH,
-        movieIds: scenesToSearch,
-      })
-    );
-  }, [dispatch, scenesToSearch]);
+    if (isSelectMode && selectedSceneIds.length > 0) {
+      // Select mode: search the explicitly selected scenes.
+      dispatch(
+        executeCommand({
+          name: MOVIE_SEARCH,
+          movieIds: selectedSceneIds,
+        })
+      );
+    } else {
+      // Non-select mode: server-side filter search - the backend searches
+      // all matching scenes without requiring the catalog client-side.
+      const preset = FILTER_PARAMS[selectedFilterKey] ?? {};
+
+      dispatch(
+        executeCommand({
+          name: MOVIE_SEARCH,
+          itemType: 'scene',
+          ...preset,
+        })
+      );
+    }
+  }, [dispatch, isSelectMode, selectedSceneIds, selectedFilterKey]);
 
   const onConfirmPress = useCallback(() => {
     setIsConfirmModalOpen(true);
@@ -77,7 +98,9 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
         isSpinning={isSearching}
         isDisabled={!items.length && !totalRecords}
         iconName={icons.SEARCH}
-        onPress={scenesToSearch.length > 5 ? onConfirmPress : onPress}
+        onPress={
+          isSelectMode && selectedSceneIds.length > 5 ? onConfirmPress : onPress
+        }
       />
 
       <ConfirmModal
@@ -85,7 +108,7 @@ function SceneIndexSearchButton(props: SceneIndexSearchButtonProps) {
         kind={kinds.DANGER}
         title={isSelectMode ? searchSelectLabel : searchIndexLabel}
         message={translate('SearchMoviesConfirmationMessageText', {
-          count: scenesToSearch.length,
+          count: totalRecords ?? 0,
         })}
         confirmLabel={isSelectMode ? searchSelectLabel : searchIndexLabel}
         onConfirm={onPress}
