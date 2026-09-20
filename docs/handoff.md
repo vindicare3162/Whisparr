@@ -1,5 +1,42 @@
 # Handoff — Performer detail & list performance work
 
+## 2026-09-15 (7): Stats + jump bar added to /movie/paged; blank-page fix
+
+Follow-up on the pilot: the two "known limitations" that had cheap fixes are now addressed.
+
+1. **Footer stats restored (server-computed):** `/movie/paged` now returns a `stats` object
+   (`totalRecords`, `monitoredCount`, `hasFileCount`, `sizeOnDisk`) computed by a
+   `MoviesStats` aggregate in `MovieRepository` honoring the same filters as the page.
+   `SceneIndexFooter` was rewritten to read `state.sceneIndex.stats` instead of iterating the
+   full client-side catalog.
+2. **A-Z jump bar restored (server-computed):** `/movie/paged` also returns `jumpBar` — the
+   first-letter histogram with the ROW_NUMBER position of each letter's first scene within
+   the filtered+sorted set (only computed when sorted by title). `SceneIndex.tsx` maps a
+   letter press to `gotoScenePage(floor(index / pageSize) + 1)`.
+
+**Two gotchas hit and fixed during verification:**
+
+- **Blank Scenes page:** `state.sceneIndex.items` was not initialized in the default state,
+  so `SceneIndexSearchButton`'s `isDisabled={!items.length}` threw on first mount and crashed
+  the whole React tree. Fix: `items: []` in `sceneIndexActions` defaultState.
+- **Postgres 42712 "MovieMetadata specified more than once":** `MovieRepository.Builder()` is
+  OVERRIDDEN to return a builder pre-joined with QualityProfile/MovieMetadata/MovieFile/
+  AlternativeTitle. Any aggregate built on `Builder()` + an explicit `Join<Movie,
+  MovieMetadata>` joins it twice. Fix: aggregates use `new SqlBuilder(_database.DatabaseType)`
+  directly. Diagnosed by enabling `SqlBuilderExtensions.LogSql` and logging `template.RawSql`.
+
+**Verified live:** `GET /movie/paged?...itemType=scene` → 200; `stats` = 59,560 records,
+41,329 monitored, 19,085 with files, 55.32 TiB on disk; `jumpBar` = 37 letters (0–9, A–Z,
+special chars) with correct positions; Missing preset (monitored+hasFile=false) → 39,743.
+
+**Remaining known limitation (deliberate):** interactive Search outside select-mode stays
+page-scoped; the filter builder remains EQUAL-only. Addressing either needs the structured
+filter payload + server-side search-by-filter command sketched in the earlier #37 comment.
+
+---
+
+## 2026-09-15 (6): Scenes index converted to server-side paging (#37 pilot, deployed)
+
 ## 2026-09-15 (6): Scenes index converted to server-side paging (#37 pilot, deployed)
 
 Per Option C agreed for #37: the **Scenes index** now uses `GET /movie/paged` server-side
