@@ -30,6 +30,7 @@ export const defaultState = {
   page: 1,
   totalPages: 0,
   totalRecords: 0,
+  items: [],
   isSaving: false,
   saveError: null,
   isDeleting: false,
