@@ -49,6 +49,29 @@ export interface MovieIndexAppState {
   columns: Column[];
 }
 
+// Server-side collection state for the Scenes index pilot (issue #37).
+export interface SceneIndexAppState extends MovieIndexAppState {
+  isFetching: boolean;
+  isPopulated: boolean;
+  error?: unknown;
+  pageSize: number;
+  page: number;
+  totalPages: number;
+  totalRecords: number;
+  items: Movie[];
+
+  // Library-wide aggregates honoring the active filters (issue #37).
+  stats?: {
+    totalRecords: number;
+    hasFileCount: number;
+    monitoredCount: number;
+    sizeOnDisk: number;
+  };
+
+  // First-letter jump bar positions within the filtered+sorted set.
+  jumpBar?: Array<{ letter: string; index: number; count: number }>;
+}
+
 interface MoviesAppState
   extends AppSectionState<Movie>,
     AppSectionDeleteState,

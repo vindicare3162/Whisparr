@@ -1,66 +1,23 @@
 import classNames from 'classnames';
 import React from 'react';
 import { useSelector } from 'react-redux';
-import { createSelector } from 'reselect';
 import { ColorImpairedConsumer } from 'App/ColorImpairedContext';
-import MoviesAppState from 'App/State/MoviesAppState';
+import AppState from 'App/State/AppState';
 import DescriptionList from 'Components/DescriptionList/DescriptionList';
 import DescriptionListItem from 'Components/DescriptionList/DescriptionListItem';
-import createClientSideCollectionSelector from 'Store/Selectors/createClientSideCollectionSelector';
-import createDeepEqualSelector from 'Store/Selectors/createDeepEqualSelector';
 import formatBytes from 'Utilities/Number/formatBytes';
 import translate from 'Utilities/String/translate';
 import styles from './SceneIndexFooter.css';
 
-function createUnoptimizedSelector() {
-  return createSelector(
-    createClientSideCollectionSelector('movies', 'sceneIndex'),
-    (movies: MoviesAppState) => {
-      return movies.items
-        .filter((movie) => movie.itemType === 'scene')
-        .map((m) => {
-          const { monitored, status, hasFile, statistics } = m;
-
-          return {
-            monitored,
-            status,
-            hasFile,
-            statistics,
-          };
-        });
-    }
-  );
-}
-
-function createSceneSelector() {
-  return createDeepEqualSelector(
-    createUnoptimizedSelector(),
-    (scenes) => scenes
-  );
-}
-
 export default function SceneIndexFooter() {
-  const scenes = useSelector(createSceneSelector());
-  const count = scenes.length;
-  let sceneFiles = 0;
-  let monitored = 0;
-  let totalFileSize = 0;
+  const { stats, totalRecords } = useSelector(
+    (state: AppState) => state.sceneIndex
+  );
 
-  scenes.forEach((s) => {
-    const { statistics = { sizeOnDisk: 0 } } = s;
-
-    const { sizeOnDisk = 0 } = statistics;
-
-    if (s.hasFile) {
-      sceneFiles += 1;
-    }
-
-    if (s.monitored) {
-      monitored++;
-    }
-
-    totalFileSize += sizeOnDisk;
-  });
+  const count = stats?.totalRecords ?? totalRecords ?? 0;
+  const sceneFiles = stats?.hasFileCount ?? 0;
+  const monitored = stats?.monitoredCount ?? 0;
+  const totalFileSize = stats?.sizeOnDisk ?? 0;
 
   return (
     <ColorImpairedConsumer>

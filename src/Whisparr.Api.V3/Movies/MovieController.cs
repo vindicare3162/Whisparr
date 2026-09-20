@@ -415,7 +415,7 @@ namespace Whisparr.Api.V3.Movies
 
         [HttpGet("paged")]
         [Produces("application/json")]
-        public PagingResource<MovieResource> GetMoviesPaged([FromQuery] PagingRequestResource paging, [FromQuery] string itemType, [FromQuery] bool? monitored, [FromQuery] bool? hasFile)
+        public MoviePagingResource GetMoviesPaged([FromQuery] PagingRequestResource paging, [FromQuery] string itemType, [FromQuery] bool? monitored, [FromQuery] bool? hasFile)
         {
             var pagingResource = new PagingResource<MovieResource>(paging);
 
@@ -481,14 +481,41 @@ namespace Whisparr.Api.V3.Movies
             var rootFolders = _rootFolderService.All();
             moviesResources.ForEach(m => m.RootFolderPath = _rootFolderService.GetBestRootFolderPath(m.Path, rootFolders));
 
-            return new PagingResource<MovieResource>
+            // Library-wide aggregates honoring the same filters (issue #37).
+            var stats = _moviesService.MoviesStats(pageSpec);
+
+            // Jump bar positions are only meaningful when the page is sorted by title.
+            var jumpBar = pageSpec.SortKey == "MovieMetadata.SortTitle"
+                ? _moviesService.MoviesJumpBar(pageSpec, pageSpec.SortDirection)
+                : new List<MovieJumpBarItem>();
+
+            return new MoviePagingResource
             {
                 Page = paged.Page,
                 PageSize = paged.PageSize,
                 SortKey = paged.SortKey,
                 SortDirection = paged.SortDirection,
                 TotalRecords = paged.TotalRecords,
-                Records = moviesResources
+                Records = moviesResources,
+
+                // Library-wide aggregates honoring the same filters (issue #37):
+                // shown in the index footer, and used for the A-Z jump bar.
+                Stats = new MovieIndexStatsResource
+                {
+                    TotalRecords = stats.TotalRecords,
+                    HasFileCount = stats.HasFileCount,
+                    MonitoredCount = stats.MonitoredCount,
+                    SizeOnDisk = stats.SizeOnDisk
+                },
+
+                JumpBar = jumpBar
+                    .Select(j => new MovieJumpBarItemResource
+                    {
+                        Letter = j.Letter,
+                        Index = j.Index,
+                        Count = j.Count
+                    })
+                    .ToList()
             };
         }
 
@@ -885,5 +912,26 @@ namespace Whisparr.Api.V3.Movies
 
             return moviesResources;
         }
+    }
+
+    public class MovieIndexStatsResource
+    {
+        public long TotalRecords { get; set; }
+        public long HasFileCount { get; set; }
+        public long MonitoredCount { get; set; }
+        public long SizeOnDisk { get; set; }
+    }
+
+    public class MovieJumpBarItemResource
+    {
+        public string Letter { get; set; }
+        public long Index { get; set; }
+        public long Count { get; set; }
+    }
+
+    public class MoviePagingResource : PagingResource<MovieResource>
+    {
+        public MovieIndexStatsResource Stats { get; set; }
+        public List<MovieJumpBarItemResource> JumpBar { get; set; }
     }
 }

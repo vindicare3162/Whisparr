@@ -35,6 +35,8 @@ namespace NzbDrone.Core.Movies
         Movie FindByTmdbId(int tmdbid);
         Movie FindByForeignId(string foreignId);
         Movie FindByTitleSlug(string titleSlug);
+        MovieIndexStats MoviesStats(PagingSpec<Movie> pagingSpec);
+        List<MovieJumpBarItem> MoviesJumpBar(PagingSpec<Movie> pagingSpec, SortDirection sortDirection);
         Movie FindByTitle(string title);
         Movie FindByTitle(string title, int year);
         Movie FindByTitle(List<string> titles, int? year, List<string> otherTitles, List<Movie> candidates);
@@ -245,6 +247,16 @@ namespace NzbDrone.Core.Movies
         public Movie FindByTitleSlug(string titleSlug)
         {
             return _movieRepository.FindByTitleSlug(titleSlug);
+        }
+
+        public MovieIndexStats MoviesStats(PagingSpec<Movie> pagingSpec)
+        {
+            return _movieRepository.MoviesStats(pagingSpec);
+        }
+
+        public List<MovieJumpBarItem> MoviesJumpBar(PagingSpec<Movie> pagingSpec, SortDirection sortDirection)
+        {
+            return _movieRepository.MoviesJumpBar(pagingSpec, sortDirection);
         }
 
         public Movie FindByPath(string path)
