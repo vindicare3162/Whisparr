@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using NLog;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Messaging.Events;
@@ -90,6 +91,7 @@ namespace NzbDrone.Core.Movies
 
     public class MovieRepository : BasicRepository<Movie>, IMovieRepository
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly IQualityProfileRepository _profileRepository;
         private readonly IAlternativeTitleRepository _alternativeTitleRepository;
 
@@ -523,9 +525,14 @@ namespace NzbDrone.Core.Movies
 
         // Aggregates for the paged index footer/jump bar, honoring the same
         // filters as the page (issue #37).
+        //
+        // NOTE: uses a plain SqlBuilder, NOT Builder() - MovieRepository.Builder()
+        // returns a builder pre-joined with QualityProfile/MovieMetadata/MovieFile/
+        // AlternativeTitle, which would duplicate the MovieMetadata and MovieFiles
+        // joins here (Postgres 42712).
         private SqlBuilder MoviesAggregateBuilder(PagingSpec<Movie> pagingSpec)
         {
-            var builder = Builder()
+            var builder = new SqlBuilder(_database.DatabaseType)
                 .Join<Movie, MovieMetadata>((m, p) => m.MovieMetadataId == p.Id)
                 .LeftJoin<Movie, MovieFile>((m, f) => m.MovieFileId == f.Id);
 
@@ -550,6 +557,8 @@ namespace NzbDrone.Core.Movies
             var template = builder.AddTemplate(
                 "SELECT /**select**/ FROM \"Movies\" /**join**/ /**leftjoin**/ /**where**/");
 
+            _logger.Debug("MoviesStats SQL: {0}", template.RawSql);
+
             using (var conn = _database.OpenConnection())
             {
                 return conn.Query<MovieIndexStats>(template.RawSql, template.Parameters).FirstOrDefault();
@@ -571,6 +580,8 @@ namespace NzbDrone.Core.Movies
                 "FROM \"Movies\" /**join**/ /**leftjoin**/ /**where**/) AS \"Jump\" " +
                 "GROUP BY \"Letter\" " +
                 "ORDER BY \"Letter\" " + direction);
+
+            _logger.Debug("MoviesJumpBar SQL: {0}", template.RawSql);
 
             using (var conn = _database.OpenConnection())
             {
