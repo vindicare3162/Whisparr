@@ -32,6 +32,7 @@ export interface MovieImageProps {
   size?: number;
   lazy?: boolean;
   overflow?: boolean;
+  alt?: string;
   onError?: () => void;
   onLoad?: () => void;
 }
@@ -47,6 +48,7 @@ function MovieImage({
   safeForWorkMode,
   size = 250,
   lazy = true,
+  alt = '',
   onError,
   onLoad,
 }: MovieImageProps) {
@@ -101,7 +103,9 @@ function MovieImage({
   }, []);
 
   if (hasError || !url) {
-    return <img className={className} style={style} src={placeholder} />;
+    return (
+      <img className={className} style={style} src={placeholder} alt={alt} />
+    );
   }
 
   const blurClass = safeForWorkMode ? styles.blur : 'blur';
@@ -110,6 +114,7 @@ function MovieImage({
       className={`${className ?? ''} ${blurClass}`}
       style={style}
       src={url ?? placeholder}
+      alt={alt}
       loading={lazy ? 'lazy' : undefined}
       onError={handleError}
       onLoad={handleLoad}

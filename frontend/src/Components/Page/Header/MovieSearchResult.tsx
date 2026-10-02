@@ -48,6 +48,7 @@ function MovieSearchResult(props: MovieSearchResultProps) {
       {itemType === 'scene' ? (
         <div className={styles.sceneContainer}>
           <ScenePoster
+            alt={title}
             className={styles.scene}
             images={images}
             size={180}
@@ -59,6 +60,7 @@ function MovieSearchResult(props: MovieSearchResultProps) {
       ) : (
         <div className={styles.posterContainer}>
           <MoviePoster
+            alt={title}
             className={styles.poster}
             images={images}
             size={250}

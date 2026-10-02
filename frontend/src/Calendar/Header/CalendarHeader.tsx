@@ -89,6 +89,7 @@ function CalendarHeader() {
         <div className={styles.navigationButtons}>
           <Button
             buttonGroupPosition="left"
+            aria-label={translate('Previous')}
             isDisabled={view === 'agenda'}
             onPress={handlePreviousPress}
           >
@@ -97,6 +98,7 @@ function CalendarHeader() {
 
           <Button
             buttonGroupPosition="right"
+            aria-label={translate('Next')}
             isDisabled={view === 'agenda'}
             onPress={handleNextPress}
           >

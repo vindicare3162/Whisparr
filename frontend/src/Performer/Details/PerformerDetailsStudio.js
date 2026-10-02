@@ -260,7 +260,7 @@ class PerformerDetailsStudio extends Component {
                 alignMenu={align.RIGHT}
                 enforceMaxHeight={false}
               >
-                <MenuButton>
+                <MenuButton aria-label={translate('Actions')}>
                   <Icon
                     name={icons.ACTIONS}
                     size={22}

@@ -242,6 +242,7 @@ class StudioDetails extends Component {
 
             <div className={styles.headerContent}>
               <StudioLogo
+                alt={title}
                 safeForWorkMode={safeForWorkMode}
                 className={styles.poster}
                 images={images}

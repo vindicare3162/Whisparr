@@ -69,6 +69,7 @@ class Specification extends Component {
       <Card
         className={styles.customFormat}
         overlayContent={true}
+        aria-label={name}
         onPress={this.onEditSpecificationPress}
       >
         <div className={styles.nameContainer}>

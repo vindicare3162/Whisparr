@@ -113,6 +113,7 @@ class AddNewScene extends Component {
 
             <Button
               className={styles.clearLookupButton}
+              title={translate('Clear')}
               onPress={this.onClearMovieLookupPress}
             >
               <Icon
