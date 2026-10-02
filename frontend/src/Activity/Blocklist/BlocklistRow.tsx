@@ -29,6 +29,7 @@ function BlocklistRow(props: BlocklistRowProps) {
   const {
     id,
     movieId,
+    movie: embeddedMovie,
     sourceTitle,
     languages,
     quality,
@@ -42,7 +43,7 @@ function BlocklistRow(props: BlocklistRowProps) {
     onSelectedChange,
   } = props;
 
-  const movie = useMovie(movieId);
+  const movie = useMovie(movieId) ?? embeddedMovie;
   const dispatch = useDispatch();
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 

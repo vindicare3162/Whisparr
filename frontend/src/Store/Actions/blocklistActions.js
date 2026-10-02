@@ -140,6 +140,15 @@ export const removeBlocklistItems = createThunk(REMOVE_BLOCKLIST_ITEMS);
 export const clearBlocklist = createAction(CLEAR_BLOCKLIST);
 
 //
+// Helpers
+
+function fetchDataAugmenter(getState, payload, data) {
+  // The full movie catalog is no longer loaded app-wide, so ask the API to
+  // embed each record's movie instead of resolving it from state.movies.
+  data.includeMovie = true;
+}
+
+//
 // Action Handlers
 
 export const actionHandlers = handleThunks({
@@ -152,7 +161,9 @@ export const actionHandlers = handleThunks({
       [serverSideCollectionHandlers.EXACT_PAGE]: GOTO_BLOCKLIST_PAGE,
       [serverSideCollectionHandlers.SORT]: SET_BLOCKLIST_SORT,
       [serverSideCollectionHandlers.FILTER]: SET_BLOCKLIST_FILTER
-    }),
+    },
+    fetchDataAugmenter
+  ),
 
   [REMOVE_BLOCKLIST_ITEM]: createRemoveItemHandler(section, '/blocklist'),
 

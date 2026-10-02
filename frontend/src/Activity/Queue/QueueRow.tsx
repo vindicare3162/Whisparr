@@ -15,6 +15,7 @@ import DownloadProtocol from 'DownloadClient/DownloadProtocol';
 import { icons, kinds, tooltipPositions } from 'Helpers/Props';
 import InteractiveImportModal from 'InteractiveImport/InteractiveImportModal';
 import Language from 'Language/Language';
+import Movie from 'Movie/Movie';
 import MovieFormats from 'Movie/MovieFormats';
 import MovieLanguages from 'Movie/MovieLanguages';
 import MovieQuality from 'Movie/MovieQuality';
@@ -41,6 +42,7 @@ import styles from './QueueRow.css';
 interface QueueRowProps {
   id: number;
   movieId?: number;
+  movie?: Movie;
   downloadId?: string;
   title: string;
   status: string;
@@ -75,6 +77,7 @@ function QueueRow(props: QueueRowProps) {
   const {
     id,
     movieId,
+    movie: embeddedMovie,
     downloadId,
     title,
     status,
@@ -106,7 +109,7 @@ function QueueRow(props: QueueRowProps) {
   } = props;
 
   const dispatch = useDispatch();
-  const movie = useMovie(movieId);
+  const movie = useMovie(movieId) ?? embeddedMovie;
   const { showRelativeDates, shortDateFormat, timeFormat } = useSelector(
     createUISettingsSelector()
   );

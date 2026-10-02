@@ -1,4 +1,5 @@
 import Language from 'Language/Language';
+import Movie from 'Movie/Movie';
 import { QualityModel } from 'Quality/Quality';
 import CustomFormat from './CustomFormat';
 
@@ -83,6 +84,7 @@ export type HistoryData =
 
 export default interface History {
   movieId: number;
+  movie?: Movie;
   sourceTitle: string;
   languages: Language[];
   quality: QualityModel;

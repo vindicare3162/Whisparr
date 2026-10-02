@@ -231,6 +231,9 @@ export const persistState = [
 
 function fetchDataAugmenter(getState, payload, data) {
   data.includeUnknownMovieItems = getState().queue.options.includeUnknownMovieItems;
+  // The full movie catalog is no longer loaded app-wide, so ask the API to
+  // embed each item's movie instead of resolving it from state.movies.
+  data.includeMovie = true;
 }
 
 //
