@@ -12,7 +12,10 @@ import MessagesAppState from './MessagesAppState';
 import MovieBlocklistAppState from './MovieBlocklistAppState';
 import MovieCollectionAppState from './MovieCollectionAppState';
 import MovieFilesAppState from './MovieFilesAppState';
-import MoviesAppState, { MovieIndexAppState } from './MoviesAppState';
+import MoviesAppState, {
+  MovieIndexAppState,
+  SceneIndexAppState,
+} from './MoviesAppState';
 import MovieSearchAppState from './MovieSearchAppState';
 import OAuthAppState from './OAuthAppState';
 import OrganizePreviewAppState from './OrganizePreviewAppState';
@@ -113,7 +116,7 @@ interface AppState {
   movieHistory: MovieHistoryAppState;
   movieIndex: MovieIndexAppState;
   movieSearch: MovieSearchAppState;
-  sceneIndex: MovieIndexAppState;
+  sceneIndex: SceneIndexAppState;
   performers: PerformersAppState;
   studios: StudiosAppState;
   movies: MoviesAppState;
