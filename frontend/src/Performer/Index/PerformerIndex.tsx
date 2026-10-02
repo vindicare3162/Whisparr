@@ -201,7 +201,7 @@ const PerformerIndex = withScrollPosition((props: PerformerIndexProps) => {
 
   return (
     <SelectProvider items={items}>
-      <PageContent>
+      <PageContent title={translate('Performers')}>
         <PageToolbar>
           <PageToolbarSection>
             <PerformerIndexRefreshPerformerButton

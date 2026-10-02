@@ -200,7 +200,7 @@ const StudioIndex = withScrollPosition((props: StudioIndexProps) => {
 
   return (
     <SelectProvider items={items}>
-      <PageContent>
+      <PageContent title={translate('Studios')}>
         <PageToolbar>
           <PageToolbarSection>
             <StudioIndexRefreshStudioButton

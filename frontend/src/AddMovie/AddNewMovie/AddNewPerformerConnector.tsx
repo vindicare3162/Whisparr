@@ -11,6 +11,7 @@ import {
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
 import createUISettingsSelector from 'Store/Selectors/createUISettingsSelector';
 import parseUrl from 'Utilities/String/parseUrl';
+import translate from 'Utilities/String/translate';
 import AddNewPerformer from './AddNewScene';
 
 interface AddNewPerformerConnectorProps {
@@ -102,6 +103,7 @@ class AddNewPerformerConnector extends Component<AddNewPerformerConnectorProps> 
 
     return (
       <AddNewPerformer
+        title={translate('AddNewPerformer')}
         term={term}
         {...otherProps}
         onMovieLookupChange={this.onMovieLookupChange}

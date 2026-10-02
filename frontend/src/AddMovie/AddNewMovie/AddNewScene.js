@@ -82,6 +82,7 @@ class AddNewScene extends Component {
 
   render() {
     const {
+      title = translate('AddNewScene'),
       error,
       items,
       hasExistingMovies,
@@ -92,7 +93,7 @@ class AddNewScene extends Component {
     const isFetching = this.state.isFetching;
 
     return (
-      <PageContent title={translate('AddNewScene')}>
+      <PageContent title={title}>
         <PageContentBody>
           <div className={styles.searchContainer}>
             <div className={styles.searchIconContainer}>
@@ -235,6 +236,7 @@ class AddNewScene extends Component {
 }
 
 AddNewScene.propTypes = {
+  title: PropTypes.string,
   term: PropTypes.string,
   isFetching: PropTypes.bool.isRequired,
   error: PropTypes.object,

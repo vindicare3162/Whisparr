@@ -11,6 +11,7 @@ import {
 import { fetchRootFolders } from 'Store/Actions/rootFolderActions';
 import createUISettingsSelector from 'Store/Selectors/createUISettingsSelector';
 import parseUrl from 'Utilities/String/parseUrl';
+import translate from 'Utilities/String/translate';
 import AddNewStudio from './AddNewScene';
 
 interface AddNewStudioConnectorProps {
@@ -102,6 +103,7 @@ class AddNewStudioConnector extends Component<AddNewStudioConnectorProps> {
 
     return (
       <AddNewStudio
+        title={translate('AddNewStudio')}
         term={term}
         {...otherProps}
         onMovieLookupChange={this.onMovieLookupChange}
