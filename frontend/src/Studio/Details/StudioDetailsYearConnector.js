@@ -59,9 +59,12 @@ function createMapStateToProps() {
     createStudioSelector(),
     createDimensionsSelector(),
     (state) => _.get(state, 'studioScenes'),
-    (year, studioForeignId, isScenes, scenes, studio, dimensions, studioScenes) => {
+    (year, studioForeignId, isScenes, movies, studio, dimensions, studioScenes) => {
+      // The full catalog is no longer loaded app-wide; the studio page fetches
+      // its own scenes into movies.studioMovies[foreignId] (see StudioDetailsConnector).
+      const studioMovies = (movies.studioMovies[studioForeignId] || {}).items || [];
 
-      let items = scenes.items.filter((scene) => scene.studioForeignId === studioForeignId && scene.year === year);
+      let items = studioMovies.filter((scene) => scene.studioForeignId === studioForeignId && scene.year === year);
       if (isScenes) {
         items = items.filter((scene) => scene.itemType === 'scene');
       } else {
