@@ -57,6 +57,7 @@ class Metadata extends Component {
       <Card
         className={styles.metadata}
         overlayContent={true}
+        aria-label={name}
         onPress={this.onEditMetadataPress}
       >
         <div className={styles.name}>

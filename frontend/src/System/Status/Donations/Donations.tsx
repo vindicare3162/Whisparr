@@ -12,6 +12,7 @@ function Donations() {
           <img
             className={styles.logo}
             src={`${window.Whisparr.urlBase}/Content/Images/Icons/logo-whisparr.png`}
+            alt="Whisparr"
           />
         </Link>
       </div>
@@ -20,6 +21,7 @@ function Donations() {
           <img
             className={styles.logo}
             src={`${window.Whisparr.urlBase}/Content/Images/Icons/logo-radarr.png`}
+            alt="Radarr"
           />
         </Link>
       </div>
@@ -28,6 +30,7 @@ function Donations() {
           <img
             className={styles.logo}
             src={`${window.Whisparr.urlBase}/Content/Images/Icons/logo-lidarr.png`}
+            alt="Lidarr"
           />
         </Link>
       </div>
@@ -36,6 +39,7 @@ function Donations() {
           <img
             className={styles.logo}
             src={`${window.Whisparr.urlBase}/Content/Images/Icons/logo-prowlarr.png`}
+            alt="Prowlarr"
           />
         </Link>
       </div>
@@ -44,6 +48,7 @@ function Donations() {
           <img
             className={styles.logo}
             src={`${window.Whisparr.urlBase}/Content/Images/Icons/logo-sonarr.png`}
+            alt="Sonarr"
           />
         </Link>
       </div>

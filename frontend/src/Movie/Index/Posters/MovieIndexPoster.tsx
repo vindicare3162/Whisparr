@@ -215,6 +215,7 @@ function MovieIndexPoster(props: MovieIndexPosterProps) {
 
         <Link className={styles.link} style={elementStyle} {...linkProps}>
           <MoviePoster
+            alt={title}
             safeForWorkMode={safeForWorkMode}
             style={elementStyle}
             images={images}

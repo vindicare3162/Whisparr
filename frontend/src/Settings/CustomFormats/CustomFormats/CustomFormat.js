@@ -83,6 +83,7 @@ class CustomFormat extends Component {
       <Card
         className={styles.customFormat}
         overlayContent={true}
+        aria-label={name}
         onPress={this.onEditCustomFormatPress}
       >
         <div className={styles.nameContainer}>

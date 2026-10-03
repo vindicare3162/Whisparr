@@ -89,6 +89,7 @@ function PerformerIndexPoster(props: PerformerIndexPosterProps) {
 
         <Link className={styles.link} style={elementStyle} to={link}>
           <MovieHeadshot
+            alt={fullName}
             safeForWorkMode={safeForWorkMode}
             style={elementStyle}
             className={styles.poster}

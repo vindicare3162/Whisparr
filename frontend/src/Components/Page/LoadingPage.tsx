@@ -9,7 +9,7 @@ const whisparrLogo =
 function LoadingPage() {
   return (
     <div className={styles.page}>
-      <img className={styles.logoFull} src={whisparrLogo} />
+      <img className={styles.logoFull} src={whisparrLogo} alt="Whisparr" />
       <LoadingMessage />
       <LoadingIndicator />
     </div>

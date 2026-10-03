@@ -3,6 +3,7 @@ import { useSelect } from 'App/SelectContext';
 import Icon from 'Components/Icon';
 import Link from 'Components/Link/Link';
 import { icons } from 'Helpers/Props';
+import translate from 'Utilities/String/translate';
 import styles from './MovieIndexPosterSelect.css';
 
 interface MovieIndexPosterSelectProps {
@@ -29,7 +30,11 @@ function MovieIndexPosterSelect(props: MovieIndexPosterSelectProps) {
   );
 
   return (
-    <Link className={styles.checkButton} onPress={onSelectPress}>
+    <Link
+      className={styles.checkButton}
+      aria-label={translate('Select')}
+      onPress={onSelectPress}
+    >
       <span className={styles.checkContainer}>
         <Icon
           className={isSelected ? styles.selected : styles.unselected}

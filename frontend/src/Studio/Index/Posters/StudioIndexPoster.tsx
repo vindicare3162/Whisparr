@@ -93,6 +93,7 @@ function StudioIndexPoster(props: StudioIndexPosterProps) {
 
         <Link className={styles.link} style={elementStyle} to={link}>
           <StudioLogo
+            alt={title}
             safeForWorkMode={safeForWorkMode}
             style={elementStyle}
             images={images}

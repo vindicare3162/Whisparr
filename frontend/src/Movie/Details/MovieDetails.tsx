@@ -376,6 +376,7 @@ class MovieDetails extends Component<Props, State> {
 
             <div className={styles.headerContent}>
               <MovieImage
+                alt={title}
                 safeForWorkMode={safeForWorkMode}
                 className={
                   itemType === 'movie' ? styles.poster : styles.screenShot

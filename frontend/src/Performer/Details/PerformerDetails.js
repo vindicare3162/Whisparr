@@ -251,6 +251,7 @@ class PerformerDetails extends Component {
 
             <div className={styles.headerContent}>
               <MovieHeadshot
+                alt={fullName}
                 safeForWorkMode={safeForWorkMode}
                 className={styles.poster}
                 images={images}

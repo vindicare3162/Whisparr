@@ -46,6 +46,7 @@ function ErrorBoundaryError(props: ErrorBoundaryErrorProps) {
         <img
           className={styles.image}
           src={`${window.Whisparr.urlBase}/Content/Images/error.png`}
+          alt=""
         />
       </div>
 

@@ -14,7 +14,8 @@ class Card extends Component {
       overlayClassName,
       overlayContent,
       children,
-      onPress
+      onPress,
+      ...otherProps
     } = this.props;
 
     if (overlayContent) {
@@ -23,6 +24,7 @@ class Card extends Component {
           <Link
             className={styles.underlay}
             onPress={onPress}
+            {...otherProps}
           />
 
           <div className={overlayClassName}>
@@ -36,6 +38,7 @@ class Card extends Component {
       <Link
         className={className}
         onPress={onPress}
+        {...otherProps}
       >
         {children}
       </Link>

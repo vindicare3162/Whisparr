@@ -173,6 +173,7 @@ function SceneIndexPoster(props: SceneIndexPosterProps) {
 
         <Link className={styles.link} style={elementStyle} to={link}>
           <ScenePoster
+            alt={title}
             className={styles.poster}
             safeForWorkMode={safeForWorkMode}
             style={elementStyle}
