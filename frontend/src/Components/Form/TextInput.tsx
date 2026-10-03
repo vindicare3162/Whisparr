@@ -11,6 +11,8 @@ import { FileInputChanged, InputChanged } from 'typings/inputs';
 import styles from './TextInput.css';
 
 export interface CommonTextInputProps {
+  id?: string;
+  'aria-label'?: string;
   className?: string;
   readOnly?: boolean;
   autoFocus?: boolean;
@@ -40,6 +42,8 @@ export interface FileInputProps extends CommonTextInputProps {
 }
 
 function TextInput({
+  id,
+  'aria-label': ariaLabel,
   className = styles.input,
   type = 'text',
   readOnly = false,
@@ -153,6 +157,8 @@ function TextInput({
   return (
     <input
       ref={inputRef}
+      id={id}
+      aria-label={ariaLabel}
       type={type}
       readOnly={readOnly}
       autoFocus={autoFocus}

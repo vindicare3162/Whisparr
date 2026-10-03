@@ -1,6 +1,13 @@
 import classNames from 'classnames';
-import React, { Children, ComponentPropsWithoutRef, ReactNode } from 'react';
+import React, {
+  Children,
+  ComponentPropsWithoutRef,
+  ReactNode,
+  useId,
+} from 'react';
 import { Size } from 'Helpers/Props/sizes';
+import FormInputGroup from './FormInputGroup';
+import FormLabel from './FormLabel';
 import styles from './FormGroup.css';
 
 interface FormGroupProps extends ComponentPropsWithoutRef<'div'> {
@@ -21,6 +28,11 @@ function FormGroup(props: FormGroupProps) {
     ...otherProps
   } = props;
 
+  // Associates the group's label with its input (label htmlFor <-> input id)
+  // so assistive technology announces the label and clicking it focuses the
+  // input. Explicit htmlFor / id props on the children win.
+  const inputId = useId();
+
   if (!advancedSettings && isAdvanced) {
     return null;
   }
@@ -30,8 +42,22 @@ function FormGroup(props: FormGroupProps) {
   return (
     <div className={classNames(className, styles[size])} {...otherProps}>
       {Children.map(children, (child) => {
-        if (!React.isValidElement(child)) {
+        if (
+          !React.isValidElement<{
+            htmlFor?: string;
+            id?: string;
+            isAdvanced?: boolean;
+          }>(child)
+        ) {
           return child;
+        }
+
+        if (child.type === FormLabel) {
+          return React.cloneElement(child, { htmlFor: inputId, ...childProps });
+        }
+
+        if (child.type === FormInputGroup) {
+          return React.cloneElement(child, { id: inputId, ...childProps });
         }
 
         return React.cloneElement(child, childProps);

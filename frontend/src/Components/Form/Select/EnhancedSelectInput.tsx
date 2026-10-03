@@ -36,6 +36,7 @@ export interface EnhancedSelectInputProps<
   V,
   T extends EnhancedSelectInputValue<V>
 > {
+  id?: string;
   className?: string;
   disabledClassName?: string;
   name: string;
@@ -143,6 +144,7 @@ function EnhancedSelectInput<V, T extends EnhancedSelectInputValue<V>>(
   props: EnhancedSelectInputProps<V, T>
 ) {
   const {
+    id,
     className = styles.enhancedSelect,
     disabledClassName = styles.isDisabled,
     name,
@@ -446,6 +448,7 @@ function EnhancedSelectInput<V, T extends EnhancedSelectInputValue<V>>(
                   </div>
                 ) : (
                   <Link
+                    id={id}
                     className={classNames(
                       className,
                       hasError && styles.hasError,

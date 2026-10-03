@@ -15,6 +15,7 @@ export interface SelectInputOption
 }
 
 interface SelectInputProps<T> {
+  id?: string;
   className?: string;
   disabledClassName?: string;
   name: string;
@@ -29,6 +30,7 @@ interface SelectInputProps<T> {
 }
 
 function SelectInput<T>({
+  id,
   className = styles.select,
   disabledClassName = styles.isDisabled,
   name,
@@ -53,6 +55,7 @@ function SelectInput<T>({
 
   return (
     <select
+      id={id}
       className={classNames(
         className,
         hasError && styles.hasError,
