@@ -1,8 +1,13 @@
 import React, { Component } from 'react';
-import { Route } from 'react-router-dom';
+import { Redirect, Route } from 'react-router-dom';
 import ImportMovieConnector from 'AddMovie/ImportMovie/Import/ImportMovieConnector';
 import ImportMovieSelectFolderConnector from 'AddMovie/ImportMovie/SelectFolder/ImportMovieSelectFolderConnector';
 import Switch from 'Components/Router/Switch';
+import getPathWithUrlBase from 'Utilities/getPathWithUrlBase';
+
+function RedirectToMovies() {
+  return <Redirect to={getPathWithUrlBase('/add/import/movies')} />;
+}
 
 class ImportMovies extends Component {
 
@@ -12,6 +17,12 @@ class ImportMovies extends Component {
   render() {
     return (
       <Switch>
+        <Route
+          exact={true}
+          path="/add/import"
+          render={RedirectToMovies}
+        />
+
         <Route
           exact={true}
           path="/add/import/movies"
