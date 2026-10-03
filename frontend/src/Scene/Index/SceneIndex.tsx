@@ -246,7 +246,7 @@ const SceneIndex = withScrollPosition((props: SceneIndexProps) => {
 
   return (
     <SelectProvider items={items}>
-      <PageContent>
+      <PageContent title={translate('Scenes')}>
         <PageToolbar>
           <PageToolbarSection>
             <SceneIndexRefreshSceneButton

@@ -231,7 +231,7 @@ const MovieIndex = withScrollPosition((props: MovieIndexProps) => {
 
   return (
     <SelectProvider items={items}>
-      <PageContent>
+      <PageContent title={translate('Movies')}>
         <PageToolbar>
           <PageToolbarSection>
             <MovieIndexRefreshMovieButton
