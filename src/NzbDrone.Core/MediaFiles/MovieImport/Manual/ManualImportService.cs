@@ -92,6 +92,13 @@ namespace NzbDrone.Core.MediaFiles.MovieImport.Manual
 
             var items = movieFiles.Select(movieFile => MapItem(movieFile, movie, directoryInfo.Name)).ToList();
 
+            if (!_diskProvider.FolderExists(movie.Path))
+            {
+                _logger.Debug("Movie folder {0} does not exist, skipping scan for unmapped files", movie.Path);
+
+                return items;
+            }
+
             var mediaFiles = _diskScanService.FilterPaths(movie.Path, _diskScanService.GetVideoFiles(movie.Path)).ToList();
             var unmappedFiles = MediaFileService.FilterExistingFiles(mediaFiles, movieFiles, movie);
 
@@ -432,7 +439,7 @@ namespace NzbDrone.Core.MediaFiles.MovieImport.Manual
             item.Quality = movieFile.Quality;
             item.Languages = movieFile.Languages;
             item.IndexerFlags = (int)movieFile.IndexerFlags;
-            item.Size = _diskProvider.GetFileSize(item.Path);
+            item.Size = _diskProvider.FileExists(item.Path) ? _diskProvider.GetFileSize(item.Path) : 0;
             item.Rejections = Enumerable.Empty<ImportRejection>();
             item.MovieFileId = movieFile.Id;
             item.CustomFormats = _formatCalculator.ParseCustomFormat(movieFile, movie);
