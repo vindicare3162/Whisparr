@@ -26,7 +26,6 @@ import usePaging from 'Components/Table/usePaging';
 import useCurrentPage from 'Helpers/Hooks/useCurrentPage';
 import useSelectState from 'Helpers/Hooks/useSelectState';
 import { align, icons, kinds } from 'Helpers/Props';
-import createMoviesFetchingSelector from 'Movie/createMoviesFetchingSelector';
 import { executeCommand } from 'Store/Actions/commandActions';
 import {
   clearQueue,
@@ -78,9 +77,6 @@ function Queue() {
   } = useSelector((state: AppState) => state.queue.paged);
 
   const { count } = useSelector(createQueueStatusSelector());
-  const { isMoviesFetching, isMoviesPopulated, moviesError } = useSelector(
-    createMoviesFetchingSelector()
-  );
   const customFilters = useSelector(createCustomFiltersSelector('queue'));
 
   const isRefreshMonitoredDownloadsExecuting = useSelector(
@@ -106,12 +102,7 @@ function Queue() {
   const [isConfirmRemoveModalOpen, setIsConfirmRemoveModalOpen] =
     useState(false);
 
-  const isRefreshing =
-    isFetching || isMoviesFetching || isRefreshMonitoredDownloadsExecuting;
-  const isAllPopulated =
-    isPopulated &&
-    (isMoviesPopulated || !items.length || items.every((m) => !m.movieId));
-  const hasError = error || moviesError;
+  const isRefreshing = isFetching || isRefreshMonitoredDownloadsExecuting;
   const selectedCount = selectedIds.length;
   const disableSelectedActions = selectedCount === 0;
 
@@ -234,13 +225,13 @@ function Queue() {
   if (!shouldBlockRefresh.current) {
     currentQueue.current = (
       <PageContentBody>
-        {isRefreshing && !isAllPopulated ? <LoadingIndicator /> : null}
+        {isRefreshing && !isPopulated ? <LoadingIndicator /> : null}
 
-        {!isRefreshing && hasError ? (
+        {!isRefreshing && error ? (
           <Alert kind={kinds.DANGER}>{translate('QueueLoadError')}</Alert>
         ) : null}
 
-        {isAllPopulated && !hasError && !items.length ? (
+        {isPopulated && !error && !items.length ? (
           <Alert kind={kinds.INFO}>
             {selectedFilterKey !== 'all' && count > 0
               ? translate('QueueFilterHasNoItems')
@@ -248,7 +239,7 @@ function Queue() {
           </Alert>
         ) : null}
 
-        {isAllPopulated && !hasError && !!items.length ? (
+        {isPopulated && !error && !!items.length ? (
           <div>
             <Table
               selectAll={true}

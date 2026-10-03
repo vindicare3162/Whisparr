@@ -9,6 +9,7 @@ import Tooltip from 'Components/Tooltip/Tooltip';
 import usePrevious from 'Helpers/Hooks/usePrevious';
 import { icons, tooltipPositions } from 'Helpers/Props';
 import Language from 'Language/Language';
+import Movie from 'Movie/Movie';
 import MovieFormats from 'Movie/MovieFormats';
 import MovieLanguages from 'Movie/MovieLanguages';
 import MovieQuality from 'Movie/MovieQuality';
@@ -26,6 +27,7 @@ import styles from './HistoryRow.css';
 interface HistoryRowProps {
   id: number;
   movieId: number;
+  movie?: Movie;
   languages: Language[];
   quality: QualityModel;
   customFormats?: CustomFormat[];
@@ -45,6 +47,7 @@ function HistoryRow(props: HistoryRowProps) {
   const {
     id,
     movieId,
+    movie: embeddedMovie,
     languages,
     quality,
     customFormats = [],
@@ -62,7 +65,7 @@ function HistoryRow(props: HistoryRowProps) {
 
   const wasMarkingAsFailed = usePrevious(isMarkingAsFailed);
   const dispatch = useDispatch();
-  const movie = useMovie(movieId);
+  const movie = useMovie(movieId) ?? embeddedMovie;
 
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 

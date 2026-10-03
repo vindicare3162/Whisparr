@@ -16,7 +16,6 @@ import TablePager from 'Components/Table/TablePager';
 import usePaging from 'Components/Table/usePaging';
 import useCurrentPage from 'Helpers/Hooks/useCurrentPage';
 import { align, icons, kinds } from 'Helpers/Props';
-import createMoviesFetchingSelector from 'Movie/createMoviesFetchingSelector';
 import {
   clearHistory,
   fetchHistory,
@@ -54,15 +53,8 @@ function History() {
     totalRecords,
   } = useSelector((state: AppState) => state.history);
 
-  const { isMoviesFetching, isMoviesPopulated, moviesError } = useSelector(
-    createMoviesFetchingSelector()
-  );
   const customFilters = useSelector(createCustomFiltersSelector('history'));
   const dispatch = useDispatch();
-
-  const isFetchingAny = isFetching || isMoviesFetching;
-  const isAllPopulated = isPopulated && (isMoviesPopulated || !items.length);
-  const hasError = error || moviesError;
 
   const {
     handleFirstPagePress,
@@ -161,9 +153,9 @@ function History() {
       </PageToolbar>
 
       <PageContentBody>
-        {isFetchingAny && !isAllPopulated ? <LoadingIndicator /> : null}
+        {isFetching && !isPopulated ? <LoadingIndicator /> : null}
 
-        {!isFetchingAny && hasError ? (
+        {!isFetching && error ? (
           <Alert kind={kinds.DANGER}>{translate('HistoryLoadError')}</Alert>
         ) : null}
 
@@ -171,12 +163,12 @@ function History() {
           // If history isPopulated and it's empty show no history found and don't
           // wait for the movies to populate because they are never coming.
 
-          isPopulated && !hasError && !items.length ? (
+          isPopulated && !error && !items.length ? (
             <Alert kind={kinds.INFO}>{translate('NoHistoryFound')}</Alert>
           ) : null
         }
 
-        {isAllPopulated && !hasError && items.length ? (
+        {isPopulated && !error && items.length ? (
           <div>
             <Table
               columns={columns}
