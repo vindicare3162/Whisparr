@@ -61,9 +61,10 @@ class StudioDetailsPageConnector extends Component {
   }
 
   componentDidUpdate(prevProps) {
-    if (!this.props.foreignId) {
-      this.props.push(`${window.Whisparr.urlBase}/`);
-      return;
+    // Only navigate away when an item that was being shown disappears (it was
+    // deleted or removed). A direct hit on an unknown id renders NotFound.
+    if (prevProps.foreignId && !this.props.foreignId) {
+      this.props.push(`${window.Whisparr.urlBase}/studios`);
     }
   }
 
