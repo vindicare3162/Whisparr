@@ -342,7 +342,7 @@ function NamingModal(props: NamingModalProps) {
   return (
     <Modal isOpen={isOpen} onModalClose={onModalClose}>
       <ModalContent onModalClose={onModalClose}>
-        <ModalHeader>{translate('movieFileNameTokens')}</ModalHeader>
+        <ModalHeader>{translate('FileNameTokens')}</ModalHeader>
 
         <ModalBody>
           <div className={styles.namingSelectContainer}>

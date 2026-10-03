@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createSelector } from 'reselect';
 import AppState from 'App/State/AppState';
@@ -33,14 +33,6 @@ const newImportListExclusion = {
   type: 'scene',
   foreignId: '',
 };
-
-const typeOptions = [
-  { key: 'movie', value: translate('Movie') },
-  { key: 'scene', value: translate('Scene') },
-  { key: 'studio', value: translate('Studio') },
-  { key: 'performer', value: translate('Performer') },
-  { key: 'tag', value: translate('Tag') },
-];
 
 interface EditImportListExclusionModalContentProps {
   id?: number;
@@ -84,6 +76,19 @@ function EditImportListExclusionModalContent({
 
   const dispatch = useDispatch();
   const previousIsSaving = usePrevious(isSaving);
+
+  // Built on mount rather than at module load so the labels are translated
+  // (translations are fetched asynchronously after the bundle is evaluated).
+  const typeOptions = useMemo(
+    () => [
+      { key: 'movie', value: translate('Movie') },
+      { key: 'scene', value: translate('Scene') },
+      { key: 'studio', value: translate('Studio') },
+      { key: 'performer', value: translate('Performer') },
+      { key: 'tag', value: translate('Tag') },
+    ],
+    []
+  );
 
   const dispatchSetImportListExclusionValue = (payload: {
     name: string;
