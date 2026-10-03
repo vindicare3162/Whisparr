@@ -18,15 +18,22 @@ interface MovieStatusProps {
   movieFileId: number | undefined;
 }
 
-function MovieStatus({ movieId, movieFileId }: MovieStatusProps) {
-  const {
-    isAvailable,
-    monitored,
-    grabbed = false,
-  } = useMovie(movieId) as Movie;
-
+function MovieStatus({ movieId, movieEntity, movieFileId }: MovieStatusProps) {
+  const movie = useMovie(movieId, movieEntity) as Movie | undefined;
   const queueItem = useSelector(createQueueItemSelectorForHook(movieId));
-  const movieFile = useMovieFile(movieFileId);
+
+  // The movie files store is only populated by pages that load them; paged
+  // pages (Wanted, Calendar) carry the file on the movie resource itself.
+  const movieFileFromStore = useMovieFile(movieFileId);
+  const movieFile = movieFileFromStore ?? movie?.movieFile;
+
+  // Default to monitored when the movie isn't in the store: we can't claim it
+  // is unmonitored, so fall through to the availability check instead.
+  const {
+    isAvailable = false,
+    monitored = true,
+    grabbed = false,
+  } = movie ?? {};
 
   const hasMovieFile = !!movieFile;
   const isQueued = !!queueItem;
