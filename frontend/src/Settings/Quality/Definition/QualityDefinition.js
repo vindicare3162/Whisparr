@@ -188,6 +188,7 @@ class QualityDefinition extends Component {
         <div className={styles.title}>
           <TextInput
             name={`${id}.${title}`}
+            aria-label={`${quality.name} ${translate('Title')}`}
             value={title}
             onChange={onTitleChange}
           />
@@ -205,6 +206,11 @@ class QualityDefinition extends Component {
             allowCross={false}
             snapDragDisabled={true}
             pearling={true}
+            ariaLabel={[
+              `${quality.name} ${translate('MinimumLimits')}`,
+              `${quality.name} ${translate('PreferredSize')}`,
+              `${quality.name} ${translate('MaximumLimits')}`
+            ]}
             renderThumb={this.thumbRenderer}
             renderTrack={this.trackRenderer}
             onChange={this.onSliderChange}

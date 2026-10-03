@@ -9,6 +9,7 @@ interface FormLabelProps {
   errorClassName?: string;
   size?: Extract<Size, keyof typeof styles>;
   name?: string;
+  htmlFor?: string;
   hasError?: boolean;
   isAdvanced?: boolean;
 }
@@ -20,6 +21,7 @@ function FormLabel(props: FormLabelProps) {
     errorClassName = styles.hasError,
     size = 'large',
     name,
+    htmlFor = name,
     hasError,
     isAdvanced = false,
   } = props;
@@ -32,7 +34,7 @@ function FormLabel(props: FormLabelProps) {
         hasError && errorClassName,
         isAdvanced && styles.isAdvanced
       )}
-      htmlFor={name}
+      htmlFor={htmlFor}
     >
       {children}
     </label>

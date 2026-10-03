@@ -171,6 +171,7 @@ export type FormInputGroupProps<V, C extends InputType> = Omit<
   className?: string;
   containerClassName?: string;
   inputClassName?: string;
+  id?: string;
   autoFocus?: boolean;
   autocomplete?: string;
   name: string;
